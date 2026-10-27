@@ -50,3 +50,24 @@ export function computeAccelerations(w) {
     }
   }
 }
+
+export function stepVerlet(w, dt) {
+  const { n, px, py, pz, vx, vy, vz, ax, ay, az } = w;
+  const h = dt / 2;
+
+  // Kick (half step) using current accelerations
+  for (let i = 0; i < n; i++) {
+    vx[i] += ax[i] * h; vy[i] += ay[i] * h; vz[i] += az[i] * h;
+  }
+  // Drift (full step)
+  for (let i = 0; i < n; i++) {
+    px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
+  }
+  // New forces at the new positions
+  computeAccelerations(w);
+  // Kick (second half step)
+  for (let i = 0; i < n; i++) {
+    vx[i] += ax[i] * h; vy[i] += ay[i] * h; vz[i] += az[i] * h;
+  }
+  w.time += dt;
+}
