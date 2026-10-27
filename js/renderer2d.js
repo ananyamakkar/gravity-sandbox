@@ -4,6 +4,12 @@ export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   let width = 0, height = 0;
 
+  const SHOW_DROP_LINES = true;
+
+  // Visual radii in AU (exaggerated so they're visible)
+  const STAR_VIS_RADIUS = 0.1;
+  const PLANET_VIS_RADIUS = 0.03;
+
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     width = window.innerWidth;
@@ -11,6 +17,14 @@ export function createRenderer(canvas) {
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // Depth fog: 1 = fully visible, lower = farther away.
+  // p.depth - cam.distance is the point's camera-space z (positive = behind the target).
+  function fog(cam, p) {
+    const z = p.depth - cam.distance;
+    const f = 1 - z / (cam.distance * 2);
+    return Math.min(1, Math.max(0.3, f));
   }
 
   function drawRing(cam, radius, color) {
@@ -97,7 +111,7 @@ export function createRenderer(canvas) {
         const p = project(cam, [wx, wy, wz], width, height);
         if (p && prev) {
           const f = k / t.count;
-          ctx.strokeStyle = `rgba(110, 200, 255, ${Math.pow(f, 2) * 0.9})`;
+          ctx.strokeStyle = `rgba(110, 200, 255, ${Math.pow(f, 2) * 0.9 * fog(cam, p)})`;
           ctx.lineWidth = 0.5 + f * 2.5;
           ctx.beginPath();
           ctx.moveTo(prev.x, prev.y);
@@ -147,6 +161,30 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Vertical line from the body to the z=0 plane, ending in a shadow dot
+  function drawDropLine(cam, x, y, z, p) {
+    if (Math.abs(z) < 1e-4) return;
+    const g = project(cam, [x, y, 0], width, height);
+    if (!g) return;
+    const f = fog(cam, p);
+    const above = z > 0;
+    ctx.strokeStyle = above
+      ? `rgba(120, 220, 255, ${0.45 * f})`
+      : `rgba(255, 130, 200, ${0.45 * f})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(g.x, g.y);
+    ctx.stroke();
+
+    ctx.fillStyle = above
+      ? `rgba(120, 220, 255, ${0.6 * f})`
+      : `rgba(255, 130, 200, ${0.6 * f})`;
+    ctx.beginPath();
+    ctx.ellipse(g.x, g.y, 3, 3 * Math.cos(cam.pitch) + 1, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   function render(cam, w, aim) {
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
@@ -154,14 +192,30 @@ export function createRenderer(canvas) {
     drawTrails(cam, w);
     drawAim(cam, aim);
 
+    // Project everything, then sort far -> near (painter's algorithm)
+    const items = [];
     for (let i = 0; i < w.n; i++) {
-      const p = project(cam, [w.px[i], w.py[i], w.pz[i]], width, height);
-      if (!p) continue;
+      const x = w.px[i], y = w.py[i], z = w.pz[i];
+      const p = project(cam, [x, y, z], width, height);
+      if (p) items.push({ i, x, y, z, p });
+    }
+    items.sort((a, b) => b.p.depth - a.p.depth);
+
+    for (const it of items) {
+      const { i, x, y, z, p } = it;
       const isStar = w.mass[i] > 0.05;
+
+      if (SHOW_DROP_LINES) drawDropLine(cam, x, y, z, p);
+
+      const visRadius = isStar ? STAR_VIS_RADIUS : PLANET_VIS_RADIUS;
+      const r = Math.max(2, visRadius * p.scale);
+
+      ctx.globalAlpha = fog(cam, p);
       ctx.fillStyle = isStar ? 'orange' : '#6cf';
       ctx.beginPath();
-      ctx.arc(p.x, p.y, isStar ? 8 : 4, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
     }
   }
 
