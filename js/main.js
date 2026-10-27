@@ -1,6 +1,6 @@
 import { createCamera, unproject } from './camera.js';
 import { createRenderer } from './renderer2d.js';
-import { createWorld, addBody, computeAccelerations, stepVerlet } from './physics.js';
+import { createWorld, addBody, computeAccelerations, stepVerlet, predictPath } from './physics.js';
 
 const canvas = document.getElementById('view');
 const renderer = createRenderer(canvas);
@@ -25,7 +25,7 @@ const LAUNCH_GAIN = 4;        // (AU/yr) of speed per AU of drag
 
 let mode = null;              // 'rotate' | 'launch' | null
 let lastX = 0, lastY = 0;
-let aim = null;               // { start: [x,y,z], current: [x,y,z] } while aiming
+let aim = null;               // { start, current, path } while aiming
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -38,7 +38,7 @@ canvas.addEventListener('pointerdown', (e) => {
     const p = unproject(cam, e.clientX, e.clientY, window.innerWidth, window.innerHeight, 0);
     if (p) {
       mode = 'launch';
-      aim = { start: p, current: p };
+      aim = { start: p, current: p, path: null };
     }
   } else {
     mode = 'rotate';
@@ -53,7 +53,15 @@ canvas.addEventListener('pointermove', (e) => {
     cam.pitch = Math.min(Math.PI / 2, Math.max(0.05, cam.pitch + dy * 0.005));
   } else if (mode === 'launch') {
     const p = unproject(cam, e.clientX, e.clientY, window.innerWidth, window.innerHeight, 0);
-    if (p) aim.current = p;
+    if (p) {
+      aim.current = p;
+      const vel = [
+        (aim.start[0] - p[0]) * LAUNCH_GAIN,
+        (aim.start[1] - p[1]) * LAUNCH_GAIN,
+        0,
+      ];
+      aim.path = predictPath(w, aim.start, vel, LAUNCH_MASS);
+    }
   }
   lastX = e.clientX;
   lastY = e.clientY;

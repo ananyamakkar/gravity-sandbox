@@ -48,14 +48,13 @@ export function createRenderer(canvas) {
   }
 
   // ---- Trails: ring buffers, recorded by SIMULATED time ----
-  const TRAIL_LEN = 200;     // points kept per body
-  const TRAIL_DT = 0.002;    // years between recorded points (200 pts = 0.4 yr)
+  const TRAIL_LEN = 200;
+  const TRAIL_DT = 0.002;
   const trails = [];
   let lastRecord = -Infinity;
 
-  // Called from the physics loop (after each step), not from render.
   function recordTrails(w) {
-    if (w.time < lastRecord) lastRecord = -Infinity;      // sim was reset
+    if (w.time < lastRecord) lastRecord = -Infinity;
     if (w.time - lastRecord < TRAIL_DT) return;
     lastRecord = w.time;
 
@@ -83,12 +82,11 @@ export function createRenderer(canvas) {
     for (let i = 0; i < w.n; i++) {
       const t = trails[i];
       if (!t || t.count < 2) continue;
-      if (w.mass[i] > 0.05) continue;          // skip stars for now
+      if (w.mass[i] > 0.05) continue;
 
       const start = (t.head - t.count + TRAIL_LEN) % TRAIL_LEN;
       let prev = null;
       for (let k = 0; k <= t.count; k++) {
-        // the last point is the body's live position, so there's no gap at the head
         let wx, wy, wz;
         if (k < t.count) {
           const idx = (start + k) % TRAIL_LEN;
@@ -98,9 +96,9 @@ export function createRenderer(canvas) {
         }
         const p = project(cam, [wx, wy, wz], width, height);
         if (p && prev) {
-          const f = k / t.count;                       // 0 = tail, 1 = head
+          const f = k / t.count;
           ctx.strokeStyle = `rgba(110, 200, 255, ${Math.pow(f, 2) * 0.9})`;
-          ctx.lineWidth = 0.5 + f * 2.5;               // thin tail, thick head
+          ctx.lineWidth = 0.5 + f * 2.5;
           ctx.beginPath();
           ctx.moveTo(prev.x, prev.y);
           ctx.lineTo(p.x, p.y);
@@ -111,7 +109,7 @@ export function createRenderer(canvas) {
     }
   }
 
-  // Shows where you're aiming: a dot at the launch point and a line to the cursor
+  // Aiming: launch dot, dashed drag line, and the predicted path
   function drawAim(cam, aim) {
     if (!aim) return;
     const a = project(cam, aim.start, width, height);
@@ -131,6 +129,22 @@ export function createRenderer(canvas) {
     ctx.beginPath();
     ctx.arc(a.x, a.y, 4, 0, Math.PI * 2);
     ctx.fill();
+
+    if (aim.path) {
+      ctx.strokeStyle = 'rgba(108, 204, 255, 0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath();
+      let started = false;
+      for (const pt of aim.path) {
+        const q = project(cam, pt, width, height);
+        if (!q) { started = false; continue; }
+        if (!started) { ctx.moveTo(q.x, q.y); started = true; }
+        else ctx.lineTo(q.x, q.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
   function render(cam, w, aim) {

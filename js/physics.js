@@ -3,19 +3,18 @@ export const G = 4 * Math.PI * Math.PI;   // AU^3 / (Msun * yr^2)
 export function createWorld(capacity = 512) {
   const f = () => new Float64Array(capacity);
   return {
-    n: 0,                       // number of live bodies
+    n: 0,
     capacity,
-    px: f(), py: f(), pz: f(),  // position (AU)
-    vx: f(), vy: f(), vz: f(),  // velocity (AU/yr)
-    ax: f(), ay: f(), az: f(),  // acceleration
-    mass: f(),                  // solar masses
-    radius: f(),                // AU (physical radius, used for collisions)
-    softening: 1e-4,            // epsilon, in AU
-    time: 0,                    // simulated years
+    px: f(), py: f(), pz: f(),
+    vx: f(), vy: f(), vz: f(),
+    ax: f(), ay: f(), az: f(),
+    mass: f(),
+    radius: f(),
+    softening: 1e-4,
+    time: 0,
   };
 }
 
-// Adds a body and returns its index.
 export function addBody(w, { pos, vel, mass, radius = 0 }) {
   if (w.n >= w.capacity) throw new Error('World is full');
   const i = w.n++;
@@ -40,11 +39,9 @@ export function computeAccelerations(w) {
       const d2 = dx * dx + dy * dy + dz * dz + eps2;
       const invD3 = 1 / (d2 * Math.sqrt(d2));
 
-      // i is pulled toward j, scaled by j's mass
       const fi = G * mass[j] * invD3;
       ax[i] += fi * dx; ay[i] += fi * dy; az[i] += fi * dz;
 
-      // j is pulled toward i, scaled by i's mass (opposite direction)
       const fj = G * mass[i] * invD3;
       ax[j] -= fj * dx; ay[j] -= fj * dy; az[j] -= fj * dz;
     }
@@ -55,19 +52,42 @@ export function stepVerlet(w, dt) {
   const { n, px, py, pz, vx, vy, vz, ax, ay, az } = w;
   const h = dt / 2;
 
-  // Kick (half step) using current accelerations
   for (let i = 0; i < n; i++) {
     vx[i] += ax[i] * h; vy[i] += ay[i] * h; vz[i] += az[i] * h;
   }
-  // Drift (full step)
   for (let i = 0; i < n; i++) {
     px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
   }
-  // New forces at the new positions
   computeAccelerations(w);
-  // Kick (second half step)
   for (let i = 0; i < n; i++) {
     vx[i] += ax[i] * h; vy[i] += ay[i] * h; vz[i] += az[i] * h;
   }
   w.time += dt;
+}
+
+// Copies the world so we can simulate "what if" without touching the real one.
+export function cloneWorld(w) {
+  const c = createWorld(w.capacity);
+  c.n = w.n;
+  c.softening = w.softening;
+  c.time = w.time;
+  for (const key of ['px','py','pz','vx','vy','vz','ax','ay','az','mass','radius']) {
+    c[key].set(w[key]);
+  }
+  return c;
+}
+
+// Simulates a ghost body forward and returns its path as an array of [x,y,z].
+// Other bodies move too, so the prediction accounts for them.
+export function predictPath(w, pos, vel, mass, steps = 400, dt = 0.002) {
+  const g = cloneWorld(w);
+  const idx = addBody(g, { pos, vel, mass });
+  computeAccelerations(g);
+
+  const path = [[pos[0], pos[1], pos[2]]];
+  for (let k = 0; k < steps; k++) {
+    stepVerlet(g, dt);
+    path.push([g.px[idx], g.py[idx], g.pz[idx]]);
+  }
+  return path;
 }
