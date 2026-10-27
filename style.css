@@ -3,11 +3,35 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: #05060a;
+  font-family: system-ui, sans-serif;
 }
 
 canvas {
   display: block;
   width: 100vw;
   height: 100vh;
-  touch-action: none; /* stops the browser hijacking touch gestures later */
+  touch-action: none;
+}
+
+#toolbar {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  background: rgba(15, 18, 30, 0.8);
+  border: 1px solid rgba(120, 150, 255, 0.25);
+  border-radius: 8px;
+  color: #cfd8ff;
+  font-size: 13px;
+  user-select: none;
+}
+
+#toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#toolbar input[type="range"] {
+  width: 180px;
 }
