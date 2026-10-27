@@ -49,17 +49,18 @@ export function createRenderer(canvas) {
     }
   }
 
-  function render(cam) {
+  function render(cam, w) {
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
     drawGrid(cam);
 
-    // Temporary sun at origin
-    const s = project(cam, [0, 0, 0], width, height);
-    if (s) {
-      ctx.fillStyle = 'orange';
+    for (let i = 0; i < w.n; i++) {
+      const p = project(cam, [w.px[i], w.py[i], w.pz[i]], width, height);
+      if (!p) continue;
+      const isStar = w.mass[i] > 0.05;
+      ctx.fillStyle = isStar ? 'orange' : '#6cf';
       ctx.beginPath();
-      ctx.arc(s.x, s.y, 8, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, isStar ? 8 : 4, 0, Math.PI * 2);
       ctx.fill();
     }
   }
