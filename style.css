@@ -1,0 +1,13 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #05060a;
+}
+
+canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none; /* stops the browser hijacking touch gestures later */
+}
