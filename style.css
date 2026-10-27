@@ -24,6 +24,9 @@ canvas {
   color: #cfd8ff;
   font-size: 13px;
   user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 #toolbar label {
@@ -34,4 +37,31 @@ canvas {
 
 #toolbar input[type="range"] {
   width: 180px;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 220px;
+}
+
+#toolbar button {
+  background: rgba(60, 80, 140, 0.35);
+  color: #cfd8ff;
+  border: 1px solid rgba(120, 150, 255, 0.35);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#toolbar button:hover {
+  background: rgba(90, 120, 200, 0.5);
+}
+
+.hint {
+  font-size: 11px;
+  color: #8fa0d0;
+  line-height: 1.4;
 }

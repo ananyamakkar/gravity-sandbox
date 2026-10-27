@@ -5,11 +5,17 @@ import { createWorld, addBody, computeAccelerations, stepVerlet, predictPath } f
 const canvas = document.getElementById('view');
 const renderer = createRenderer(canvas);
 
+// ---- Camera ----
 const cam = createCamera();
-cam.pitch = Math.PI / 3;
-cam.yaw = 0.5;
-cam.distance = 8;
+function resetCamera() {
+  cam.target = [0, 0, 0];
+  cam.yaw = 0.5;
+  cam.pitch = Math.PI / 3;
+  cam.distance = 8;
+}
+resetCamera();
 
+// ---- World ----
 const w = createWorld();
 addBody(w, { pos: [0, 0, 0], vel: [0, 0, 0], mass: 1 });
 addBody(w, { pos: [1, 0, 0], vel: [0, 2 * Math.PI, 0], mass: 3e-6 });
@@ -28,8 +34,22 @@ inclSlider.addEventListener('input', () => {
   inclLabel.textContent = inclination + '°';
 });
 
+// ---- UI: camera buttons ----
+document.getElementById('btn-top').addEventListener('click', () => {
+  cam.pitch = Math.PI / 2;
+});
+document.getElementById('btn-side').addEventListener('click', () => {
+  cam.pitch = 0.05;
+});
+document.getElementById('btn-reset').addEventListener('click', resetCamera);
+
+const orthoBtn = document.getElementById('btn-ortho');
+orthoBtn.addEventListener('click', () => {
+  cam.ortho = !cam.ortho;
+  orthoBtn.textContent = cam.ortho ? 'Orthographic' : 'Perspective';
+});
+
 // Tilts an in-plane drag vector out of the plane by the inclination angle.
-// The in-plane speed is split: cos(i) stays in-plane, sin(i) goes into z.
 function launchVelocity(start, current) {
   const dx = (start[0] - current[0]) * LAUNCH_GAIN;
   const dy = (start[1] - current[1]) * LAUNCH_GAIN;
@@ -40,13 +60,16 @@ function launchVelocity(start, current) {
 }
 
 // ---- Input ----
-// Right button (or middle) = rotate camera. Left button = launch a body.
+// Left = launch. Right = rotate. Middle or Shift+Left = pan.
 const LAUNCH_MASS = 3e-6;
 const LAUNCH_GAIN = 4;
 
-let mode = null;
+let mode = null;              // 'rotate' | 'launch' | 'pan' | null
 let lastX = 0, lastY = 0;
 let aim = null;
+
+const W = () => window.innerWidth;
+const H = () => window.innerHeight;
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -55,8 +78,11 @@ canvas.addEventListener('pointerdown', (e) => {
   lastY = e.clientY;
   canvas.setPointerCapture(e.pointerId);
 
-  if (e.button === 0) {
-    const p = unproject(cam, e.clientX, e.clientY, window.innerWidth, window.innerHeight, 0);
+  if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+    e.preventDefault();
+    mode = 'pan';
+  } else if (e.button === 0) {
+    const p = unproject(cam, e.clientX, e.clientY, W(), H(), 0);
     if (p) {
       mode = 'launch';
       aim = { start: p, current: p, path: null };
@@ -72,8 +98,20 @@ canvas.addEventListener('pointermove', (e) => {
     const dy = e.clientY - lastY;
     cam.yaw -= dx * 0.005;
     cam.pitch = Math.min(Math.PI / 2, Math.max(0.05, cam.pitch + dy * 0.005));
+  } else if (mode === 'pan') {
+    // Find the plane point under the cursor before and after the move,
+    // then shift the camera target by the difference.
+    const p0 = unproject(cam, lastX, lastY, W(), H(), 0);
+    const p1 = unproject(cam, e.clientX, e.clientY, W(), H(), 0);
+    if (p0 && p1) {
+      cam.target = [
+        cam.target[0] + (p0[0] - p1[0]),
+        cam.target[1] + (p0[1] - p1[1]),
+        cam.target[2],
+      ];
+    }
   } else if (mode === 'launch') {
-    const p = unproject(cam, e.clientX, e.clientY, window.innerWidth, window.innerHeight, 0);
+    const p = unproject(cam, e.clientX, e.clientY, W(), H(), 0);
     if (p) {
       aim.current = p;
       aim.path = predictPath(w, aim.start, launchVelocity(aim.start, p), LAUNCH_MASS);
