@@ -18,14 +18,35 @@ computeAccelerations(w);
 window.addEventListener('resize', renderer.resize);
 renderer.resize();
 
+// ---- UI: inclination slider ----
+const inclSlider = document.getElementById('incl');
+const inclLabel = document.getElementById('incl-val');
+let inclination = 0;   // degrees
+
+inclSlider.addEventListener('input', () => {
+  inclination = Number(inclSlider.value);
+  inclLabel.textContent = inclination + '°';
+});
+
+// Tilts an in-plane drag vector out of the plane by the inclination angle.
+// The in-plane speed is split: cos(i) stays in-plane, sin(i) goes into z.
+function launchVelocity(start, current) {
+  const dx = (start[0] - current[0]) * LAUNCH_GAIN;
+  const dy = (start[1] - current[1]) * LAUNCH_GAIN;
+  const speed = Math.hypot(dx, dy);
+  const i = (inclination * Math.PI) / 180;
+  const c = Math.cos(i);
+  return [dx * c, dy * c, speed * Math.sin(i)];
+}
+
 // ---- Input ----
 // Right button (or middle) = rotate camera. Left button = launch a body.
-const LAUNCH_MASS = 3e-6;     // solar masses (about an Earth)
-const LAUNCH_GAIN = 4;        // (AU/yr) of speed per AU of drag
+const LAUNCH_MASS = 3e-6;
+const LAUNCH_GAIN = 4;
 
-let mode = null;              // 'rotate' | 'launch' | null
+let mode = null;
 let lastX = 0, lastY = 0;
-let aim = null;               // { start, current, path } while aiming
+let aim = null;
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -55,12 +76,7 @@ canvas.addEventListener('pointermove', (e) => {
     const p = unproject(cam, e.clientX, e.clientY, window.innerWidth, window.innerHeight, 0);
     if (p) {
       aim.current = p;
-      const vel = [
-        (aim.start[0] - p[0]) * LAUNCH_GAIN,
-        (aim.start[1] - p[1]) * LAUNCH_GAIN,
-        0,
-      ];
-      aim.path = predictPath(w, aim.start, vel, LAUNCH_MASS);
+      aim.path = predictPath(w, aim.start, launchVelocity(aim.start, p), LAUNCH_MASS);
     }
   }
   lastX = e.clientX;
@@ -69,14 +85,9 @@ canvas.addEventListener('pointermove', (e) => {
 
 canvas.addEventListener('pointerup', (e) => {
   if (mode === 'launch' && aim) {
-    // Slingshot: velocity points opposite to the drag
-    const vel = [
-      (aim.start[0] - aim.current[0]) * LAUNCH_GAIN,
-      (aim.start[1] - aim.current[1]) * LAUNCH_GAIN,
-      0,
-    ];
+    const vel = launchVelocity(aim.start, aim.current);
     addBody(w, { pos: aim.start, vel, mass: LAUNCH_MASS });
-    computeAccelerations(w);   // the new body needs valid accelerations
+    computeAccelerations(w);
   }
   mode = null;
   aim = null;
