@@ -1,3 +1,8 @@
+import { rotX, rotZ, mulMat, mulMatVec } from './vec3.js';
+
+// Temporary test: rotating [1,0,0] by 90° around z should give about [0,1,0]
+console.log(mulMatVec(rotZ(Math.PI / 2), [1, 0, 0]));
+
 const canvas = document.getElementById('view');
 const ctx = canvas.getContext('2d');
 
