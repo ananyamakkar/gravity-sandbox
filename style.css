@@ -13,10 +13,8 @@ canvas {
   touch-action: none;
 }
 
-#toolbar {
+#toolbar, #info {
   position: fixed;
-  top: 12px;
-  left: 12px;
   padding: 10px 14px;
   background: rgba(15, 18, 30, 0.8);
   border: 1px solid rgba(120, 150, 255, 0.25);
@@ -24,10 +22,47 @@ canvas {
   color: #cfd8ff;
   font-size: 13px;
   user-select: none;
+}
+
+#toolbar {
+  top: 12px;
+  left: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+
+#info {
+  top: 12px;
+  right: 12px;
+  width: 250px;
+  line-height: 1.5;
+}
+
+#info[hidden] { display: none; }
+
+#info h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #fff;
+}
+
+#info .sec {
+  margin-top: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8fa0d0;
+}
+
+#info .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#info .row span:first-child { color: #9fb0e0; }
+#info .row span:last-child  { color: #fff; font-variant-numeric: tabular-nums; }
 
 #toolbar label {
   display: flex;

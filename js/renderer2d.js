@@ -20,7 +20,6 @@ export function createRenderer(canvas) {
   }
 
   // Depth fog: 1 = fully visible, lower = farther away.
-  // p.depth - cam.distance is the point's camera-space z (positive = behind the target).
   function fog(cam, p) {
     const z = p.depth - cam.distance;
     const f = 1 - z / (cam.distance * 2);
@@ -185,7 +184,7 @@ export function createRenderer(canvas) {
     ctx.fill();
   }
 
-  function render(cam, w, aim) {
+  function render(cam, w, aim, selected = -1) {
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
     drawGrid(cam);
@@ -216,6 +215,15 @@ export function createRenderer(canvas) {
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
+
+      // Selection ring
+      if (i === selected) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r + 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
   }
 
