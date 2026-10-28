@@ -2,6 +2,7 @@ import { createCamera, project, unproject } from './camera.js';
 import { createRenderer } from './renderer2d.js';
 import { createWorld, addBody, computeAccelerations, step, predictPath, diagnostics, radiusFromMass, handleCollisions } from './physics.js';
 import { orbitalElements, sampleOrbit, AU_YR_TO_KMS } from './orbits.js';
+import { loadPreset } from './presets.js';
 
 const canvas = document.getElementById('view');
 const renderer = createRenderer(canvas);
@@ -12,18 +13,19 @@ function resetCamera() {
   cam.target = [0, 0, 0];
   cam.yaw = 0.5;
   cam.pitch = Math.PI / 3;
-  cam.distance = 8;
+  cam.distance = PRESET_DISTANCE;
 }
+let PRESET_DISTANCE = 8;
 resetCamera();
 
 // ---- World ----
 const w = createWorld();
+let currentPreset = 'earth';
 function initWorld() {
-  w.n = 0;
-  w.time = 0;
-  addBody(w, { pos: [0, 0, 0], vel: [0, 0, 0], mass: 1, radius: radiusFromMass(1) });
-  addBody(w, { pos: [1, 0, 0], vel: [0, 2 * Math.PI, 0], mass: 3e-6, radius: radiusFromMass(3e-6) });
-  computeAccelerations(w);
+  const p = loadPreset(w, currentPreset);
+  PRESET_DISTANCE = p.distance;
+  cam.target = [0, 0, 0];
+  cam.distance = p.distance;
 }
 initWorld();
 
@@ -61,10 +63,10 @@ speedSlider.addEventListener('input', () => {
   speedLabel.textContent = speed.toFixed(speed < 1 ? 2 : 1) + ' yr/s';
 });
 
-// Selection (declared early because Restart uses it)
+// Selection (declared early because Restart and the scenario dropdown use it)
 let selected = -1;
 
-// Integrator choice and restart
+// Integrator choice, restart, and scenario choice
 let method = 'verlet';
 document.getElementById('method').addEventListener('change', (e) => {
   method = e.target.value;
@@ -72,6 +74,13 @@ document.getElementById('method').addEventListener('change', (e) => {
 });
 
 document.getElementById('btn-restart').addEventListener('click', () => {
+  initWorld();
+  selected = -1;
+  resetBaseline();
+});
+
+document.getElementById('preset').addEventListener('change', (e) => {
+  currentPreset = e.target.value;
   initWorld();
   selected = -1;
   resetBaseline();
@@ -304,7 +313,7 @@ let acc = 0;
 let lastInfo = 0;
 
 const flashes = [];            // visual events from merges, consumed by the renderer
-const COLLISION_SCALE = 150;   // physical radii are tiny; this makes merges happen at visible distances
+const COLLISION_SCALE = 30;    // physical radii are tiny; this makes merges happen at visible distances
 
 function runCollisions() {
   const events = handleCollisions(w, COLLISION_SCALE);
@@ -339,7 +348,7 @@ function frame(now) {
 
   const orbit = (selected >= 0 && selected < w.n) ? sampleOrbit(w, selected) : null;
   renderer.render(cam, w, aim, selected, orbit, flashes);
-  flashes.length = 0;          // the renderer copies what it needs; this prevents the list growing forever
+  flashes.length = 0;
 
   if (now - lastInfo > 100) {
     updateInfo();

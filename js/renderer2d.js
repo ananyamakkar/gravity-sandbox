@@ -97,7 +97,6 @@ export function createRenderer(canvas) {
     for (let i = 0; i < w.n; i++) {
       const t = trails[i];
       if (!t || t.count < 2) continue;
-      if (w.mass[i] > 0.05) continue;
 
       const start = (t.head - t.count + TRAIL_LEN) % TRAIL_LEN;
       let prev = null;
@@ -240,10 +239,10 @@ export function createRenderer(canvas) {
 
   function drawFlashes(cam) {
     const now = performance.now();
-    ctx.globalCompositeOperation = 'lighter';   // additive: overlapping light accumulates
+    ctx.globalCompositeOperation = 'lighter';
     for (let k = activeFlashes.length - 1; k >= 0; k--) {
       const f = activeFlashes[k];
-      const t = (now - f.born) / FLASH_TIME;     // 0 -> 1 over the flash's life
+      const t = (now - f.born) / FLASH_TIME;
       if (t >= 1) { activeFlashes.splice(k, 1); continue; }
 
       const p = project(cam, [f.x, f.y, f.z], width, height);
