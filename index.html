@@ -49,6 +49,25 @@
     </label>
 
     <label>
+      Launch body:
+      <select id="body-type">
+        <option value="star">Sun-like star</option>
+        <option value="reddwarf">Red dwarf</option>
+        <option value="giant">Gas giant</option>
+        <option value="rocky" selected>Rocky planet</option>
+        <option value="moon">Moon</option>
+        <option value="asteroid">Asteroid</option>
+        <option value="comet">Comet</option>
+        <option value="custom">Custom</option>
+      </select>
+    </label>
+
+    <label>
+      Mass: <span id="mass-val"></span>
+      <input id="mass" type="range" min="-17" max="1.5" step="0.01" value="-5.52">
+    </label>
+
+    <label>
       Inclination: <span id="incl-val">0°</span>
       <input id="incl" type="range" min="-90" max="90" step="1" value="0">
     </label>

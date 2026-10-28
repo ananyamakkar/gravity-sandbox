@@ -107,6 +107,51 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// ---- UI: launch body type + mass ----
+// Masses in solar masses (M☉)
+const BODY_TYPES = {
+  star:     1,        // Sun-like
+  reddwarf: 0.2,
+  giant:    9.5e-4,   // Jupiter
+  rocky:    3e-6,     // Earth-ish
+  moon:     3.7e-8,   // our Moon
+  asteroid: 4.7e-10,  // Ceres
+  comet:    1e-16,    // tiny: gravitationally a test particle
+};
+
+let launchMass = BODY_TYPES.rocky;
+
+const typeSelect = document.getElementById('body-type');
+const massSlider = document.getElementById('mass');
+const massLabel = document.getElementById('mass-val');
+
+function fmtMass(m) {
+  if (m >= 0.01) return m.toFixed(2) + ' M☉';
+  const earth = m / 3.003e-6;
+  if (earth >= 0.01) return earth.toFixed(earth < 10 ? 2 : 1) + ' M⊕';
+  return m.toExponential(1) + ' M☉';
+}
+
+function setLaunchMass(m) {
+  launchMass = m;
+  massSlider.value = Math.log10(m);
+  massLabel.textContent = fmtMass(m);
+}
+
+typeSelect.addEventListener('change', () => {
+  const m = BODY_TYPES[typeSelect.value];
+  if (m !== undefined) setLaunchMass(m); // "custom" keeps the current mass
+});
+
+// Slider is log10(mass): -17 -> 1e-17 M☉, 1.5 -> ~31 M☉
+massSlider.addEventListener('input', () => {
+  launchMass = Math.pow(10, Number(massSlider.value));
+  massLabel.textContent = fmtMass(launchMass);
+  typeSelect.value = 'custom';
+});
+
+setLaunchMass(launchMass);
+
 // ---- UI: inclination slider ----
 const inclSlider = document.getElementById('incl');
 const inclLabel = document.getElementById('incl-val');
@@ -141,7 +186,6 @@ scaleBtn.addEventListener('click', () => {
 });
 
 // ---- Launch velocity ----
-const LAUNCH_MASS = 3e-6;
 const LAUNCH_GAIN = 4;
 
 function launchVelocity(start, current) {
@@ -181,12 +225,9 @@ function updateInfo() {
   infoEl.hidden = false;
   const i = selected;
   const el = orbitalElements(w, i);
-  const earthMasses = w.mass[i] / 3.003e-6;
 
   let html = `<h3>Body #${i}</h3>`;
-  html += row('Mass', w.mass[i] >= 0.01
-    ? fmt(w.mass[i], 3) + ' M☉'
-    : fmt(earthMasses, 2) + ' M⊕');
+  html += row('Mass', fmtMass(w.mass[i]));
   html += row('Position (AU)', `${fmt(w.px[i], 2)}, ${fmt(w.py[i], 2)}, ${fmt(w.pz[i], 2)}`);
 
   if (!el) {
@@ -296,7 +337,7 @@ canvas.addEventListener('pointermove', (e) => {
       const p = unproject(cam, e.clientX, e.clientY, W(), H(), 0);
       if (p) {
         aim.current = p;
-        aim.path = predictPath(w, aim.start, launchVelocity(aim.start, p), LAUNCH_MASS);
+        aim.path = predictPath(w, aim.start, launchVelocity(aim.start, p), launchMass);
       }
     }
   }
@@ -311,7 +352,7 @@ canvas.addEventListener('pointerup', (e) => {
       selected = pickBody(e.clientX, e.clientY);
     } else {
       const vel = launchVelocity(aim.start, aim.current);
-      addBody(w, { pos: aim.start, vel, mass: LAUNCH_MASS, radius: radiusFromMass(LAUNCH_MASS) });
+      addBody(w, { pos: aim.start, vel, mass: launchMass, radius: radiusFromMass(launchMass) });
       computeAccelerations(w);
       resetBaseline();
     }
