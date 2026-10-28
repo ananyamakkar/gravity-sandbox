@@ -19,7 +19,6 @@ export function createRenderer(canvas) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  // Depth fog: 1 = fully visible, lower = farther away.
   function fog(cam, p) {
     const z = p.depth - cam.distance;
     const f = 1 - z / (cam.distance * 2);
@@ -67,7 +66,10 @@ export function createRenderer(canvas) {
   let lastRecord = -Infinity;
 
   function recordTrails(w) {
-    if (w.time < lastRecord) lastRecord = -Infinity;
+    if (w.time < lastRecord) {
+      lastRecord = -Infinity;
+      trails.length = 0;                 // sim was restarted: clear old trails
+    }
     if (w.time - lastRecord < TRAIL_DT) return;
     lastRecord = w.time;
 
@@ -160,6 +162,42 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Small labeled marker on the orbit (periapsis, apoapsis, nodes)
+  function drawMarker(cam, pt, label, color) {
+    if (!pt) return;
+    const p = project(cam, pt, width, height);
+    if (!p) return;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillText(label, p.x + 7, p.y + 4);
+  }
+
+  // The selected body's analytic orbit: ellipse + markers
+  function drawOrbit(cam, orbit) {
+    if (!orbit || orbit.points.length < 2) return;
+
+    ctx.strokeStyle = 'rgba(255, 220, 120, 0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    let started = false;
+    for (const pt of orbit.points) {
+      const q = project(cam, pt, width, height);
+      if (!q) { started = false; continue; }
+      if (!started) { ctx.moveTo(q.x, q.y); started = true; }
+      else ctx.lineTo(q.x, q.y);
+    }
+    if (orbit.apoapsis) ctx.closePath();
+    ctx.stroke();
+
+    drawMarker(cam, orbit.periapsis, 'Pe', '#ffd27a');
+    drawMarker(cam, orbit.apoapsis, 'Ap', '#ffd27a');
+    drawMarker(cam, orbit.nodeUp, '☊ asc', '#7af0a8');
+    drawMarker(cam, orbit.nodeDown, '☋ desc', '#f07a9a');
+  }
+
   // Vertical line from the body to the z=0 plane, ending in a shadow dot
   function drawDropLine(cam, x, y, z, p) {
     if (Math.abs(z) < 1e-4) return;
@@ -184,10 +222,64 @@ export function createRenderer(canvas) {
     ctx.fill();
   }
 
-  function render(cam, w, aim, selected = -1) {
+  // ---- Merge flashes: glow + expanding particle burst ----
+  const activeFlashes = [];
+  const FLASH_TIME = 700;   // milliseconds
+
+  function addFlashes(events) {
+    const now = performance.now();
+    for (const ev of events) {
+      const parts = [];
+      const count = ev.big ? 24 : 12;
+      for (let k = 0; k < count; k++) {
+        parts.push({ a: Math.random() * Math.PI * 2, s: 0.5 + Math.random() });
+      }
+      activeFlashes.push({ x: ev.x, y: ev.y, z: ev.z, big: ev.big, born: now, parts });
+    }
+  }
+
+  function drawFlashes(cam) {
+    const now = performance.now();
+    ctx.globalCompositeOperation = 'lighter';   // additive: overlapping light accumulates
+    for (let k = activeFlashes.length - 1; k >= 0; k--) {
+      const f = activeFlashes[k];
+      const t = (now - f.born) / FLASH_TIME;     // 0 -> 1 over the flash's life
+      if (t >= 1) { activeFlashes.splice(k, 1); continue; }
+
+      const p = project(cam, [f.x, f.y, f.z], width, height);
+      if (!p) continue;
+
+      const base = f.big ? 40 : 22;
+      const R = base * (0.3 + t);
+      const alpha = 1 - t;
+
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, R);
+      g.addColorStop(0, `rgba(255, 240, 200, ${alpha})`);
+      g.addColorStop(0.4, `rgba(255, 170, 80, ${alpha * 0.5})`);
+      g.addColorStop(1, 'rgba(255, 120, 40, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, R, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = `rgba(255, 220, 160, ${alpha})`;
+      for (const q of f.parts) {
+        const d = base * 1.5 * q.s * t;
+        ctx.beginPath();
+        ctx.arc(p.x + Math.cos(q.a) * d, p.y + Math.sin(q.a) * d, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function render(cam, w, aim, selected = -1, orbit = null, flashes = []) {
+    addFlashes(flashes);
+
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
     drawGrid(cam);
+    drawOrbit(cam, orbit);
     drawTrails(cam, w);
     drawAim(cam, aim);
 
@@ -216,7 +308,6 @@ export function createRenderer(canvas) {
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      // Selection ring
       if (i === selected) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.lineWidth = 1.5;
@@ -225,6 +316,8 @@ export function createRenderer(canvas) {
         ctx.stroke();
       }
     }
+
+    drawFlashes(cam);
   }
 
   return { resize, render, recordTrails };
