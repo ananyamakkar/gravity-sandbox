@@ -13,11 +13,21 @@
     <div class="btn-row">
       <button id="btn-play">Pause</button>
       <button id="btn-step">Step</button>
+      <button id="btn-restart">Restart</button>
     </div>
 
     <label>
       Speed: <span id="speed-val">0.50 yr/s</span>
       <input id="speed" type="range" min="-2" max="2" step="0.01" value="-0.301">
+    </label>
+
+    <label>
+      Integrator:
+      <select id="method">
+        <option value="verlet">Verlet (symplectic)</option>
+        <option value="rk4">RK4</option>
+        <option value="euler">Euler (bad)</option>
+      </select>
     </label>
 
     <label>

@@ -123,3 +123,138 @@ export function diagnostics(w) {
   }
   return { energy: ke + pe, ke, pe, P, L, pscale };
 }
+
+// ---- Alternative integrators ----
+
+// Explicit Euler: the "what not to do" method. It adds energy every step,
+// so orbits spiral outward. Positions use the OLD velocity, velocities use the OLD acceleration.
+export function stepEuler(w, dt) {
+  const { n, px, py, pz, vx, vy, vz, ax, ay, az } = w;
+  for (let i = 0; i < n; i++) {
+    px[i] += vx[i] * dt; py[i] += vy[i] * dt; pz[i] += vz[i] * dt;
+  }
+  for (let i = 0; i < n; i++) {
+    vx[i] += ax[i] * dt; vy[i] += ay[i] * dt; vz[i] += az[i] * dt;
+  }
+  computeAccelerations(w);
+  w.time += dt;
+}
+
+function triple(cap) {
+  return [new Float64Array(cap), new Float64Array(cap), new Float64Array(cap)];
+}
+
+// Classic 4th-order Runge-Kutta. Very accurate per step, but not symplectic,
+// so energy drifts slowly over long runs.
+export function stepRK4(w, dt) {
+  const n = w.n;
+  if (!w._rk || w._rk.cap !== w.capacity) {
+    const c = w.capacity;
+    w._rk = { cap: c, p0: triple(c), v0: triple(c), v2: triple(c), v3: triple(c),
+              v4: triple(c), a1: triple(c), a2: triple(c), a3: triple(c) };
+  }
+  const s = w._rk;
+  const P = [w.px, w.py, w.pz];
+  const V = [w.vx, w.vy, w.vz];
+  const A = [w.ax, w.ay, w.az];
+  const h = dt / 2;
+
+  // Save the starting state and the starting acceleration (a1)
+  for (let c = 0; c < 3; c++) for (let i = 0; i < n; i++) {
+    s.p0[c][i] = P[c][i]; s.v0[c][i] = V[c][i]; s.a1[c][i] = A[c][i];
+  }
+
+  // Stage 2: half step using v1 (= v0)
+  for (let c = 0; c < 3; c++) for (let i = 0; i < n; i++) P[c][i] = s.p0[c][i] + s.v0[c][i] * h;
+  computeAccelerations(w);
+  for (let c = 0; c < 3; c++) for (let i = 0; i < n; i++) {
+    s.a2[c][i] = A[c][i];
+    s.v2[c][i] = s.v0[c][i] + s.a1[c][i] * h;
+  }
+
+  // Stage 3: half step using v2
+  for (let c = 0; c < 3; c++) for (let i = 0; i < n; i++) P[c][i] = s.p0[c][i] + s.v2[c][i] * h;
+  computeAccelerations(w);
+  for (let c = 0; c < 3; c++) for (let i = 0; i < n; i++) {
+    s.a3[c][i] = A[c][i];
+    s.v3[c][i] = s.v0[c][i] + s.a2[c][i] * h;
+  }
+
+  // Stage 4: full step using v3. Afterwards w.ax/ay/az hold a4.
+  for (let c = 0; c < 3; c++) for (let i = 0; i < n; i++) {
+    P[c][i] = s.p0[c][i] + s.v3[c][i] * dt;
+    s.v4[c][i] = s.v0[c][i] + s.a3[c][i] * dt;
+  }
+  computeAccelerations(w);
+
+  // Combine the four stages
+  for (let c = 0; c < 3; c++) for (let i = 0; i < n; i++) {
+    P[c][i] = s.p0[c][i] + (dt / 6) * (s.v0[c][i] + 2 * s.v2[c][i] + 2 * s.v3[c][i] + s.v4[c][i]);
+    V[c][i] = s.v0[c][i] + (dt / 6) * (s.a1[c][i] + 2 * s.a2[c][i] + 2 * s.a3[c][i] + A[c][i]);
+  }
+  computeAccelerations(w);   // leave valid accelerations for the next step
+  w.time += dt;
+}
+
+// Picks an integrator by name
+export function step(w, dt, method = 'verlet') {
+  if (method === 'euler') stepEuler(w, dt);
+  else if (method === 'rk4') stepRK4(w, dt);
+  else stepVerlet(w, dt);
+}
+
+// Radius from mass at constant density (AU). Calibrated so the Sun is ~0.00465 AU
+// and Earth ~4.26e-5 AU (real sizes).
+export function radiusFromMass(m) {
+  return 0.00465 * Math.cbrt(m);
+}
+
+// Merges overlapping bodies (inelastic, momentum-conserving).
+// Returns an array of events { x, y, z, size, big } for the renderer to flash.
+export function handleCollisions(w, scaleFactor = 1) {
+  const events = [];
+  let i = 0;
+  while (i < w.n) {
+    let merged = false;
+    for (let j = i + 1; j < w.n; j++) {
+      const dx = w.px[j] - w.px[i];
+      const dy = w.py[j] - w.py[i];
+      const dz = w.pz[j] - w.pz[i];
+      const rr = (w.radius[i] + w.radius[j]) * scaleFactor;
+      if (dx * dx + dy * dy + dz * dz < rr * rr) {
+        mergeBodies(w, i, j, events);
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) i++;
+  }
+  return events;
+}
+
+function mergeBodies(w, i, j, events) {
+  const mi = w.mass[i], mj = w.mass[j];
+  const m = mi + mj;
+  const wi = mi / m, wj = mj / m;
+
+  w.px[i] = w.px[i] * wi + w.px[j] * wj;
+  w.py[i] = w.py[i] * wi + w.py[j] * wj;
+  w.pz[i] = w.pz[i] * wi + w.pz[j] * wj;
+  w.vx[i] = w.vx[i] * wi + w.vx[j] * wj;
+  w.vy[i] = w.vy[i] * wi + w.vy[j] * wj;
+  w.vz[i] = w.vz[i] * wi + w.vz[j] * wj;
+  w.mass[i] = m;
+  w.radius[i] = radiusFromMass(m);
+
+  events.push({ x: w.px[i], y: w.py[i], z: w.pz[i], size: Math.cbrt(Math.min(mi, mj)), big: m > 0.05 });
+
+  // Remove j by moving the last body into its slot
+  const last = w.n - 1;
+  if (j !== last) {
+    for (const key of ['px','py','pz','vx','vy','vz','ax','ay','az','mass','radius']) {
+      w[key][j] = w[key][last];
+    }
+  }
+  w.n--;
+  computeAccelerations(w);
+}

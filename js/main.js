@@ -1,6 +1,6 @@
 import { createCamera, project, unproject } from './camera.js';
 import { createRenderer } from './renderer2d.js';
-import { createWorld, addBody, computeAccelerations, stepVerlet, predictPath, diagnostics } from './physics.js';
+import { createWorld, addBody, computeAccelerations, step, predictPath, diagnostics, radiusFromMass, handleCollisions } from './physics.js';
 import { orbitalElements, sampleOrbit, AU_YR_TO_KMS } from './orbits.js';
 
 const canvas = document.getElementById('view');
@@ -18,9 +18,14 @@ resetCamera();
 
 // ---- World ----
 const w = createWorld();
-addBody(w, { pos: [0, 0, 0], vel: [0, 0, 0], mass: 1 });
-addBody(w, { pos: [1, 0, 0], vel: [0, 2 * Math.PI, 0], mass: 3e-6 });
-computeAccelerations(w);
+function initWorld() {
+  w.n = 0;
+  w.time = 0;
+  addBody(w, { pos: [0, 0, 0], vel: [0, 0, 0], mass: 1, radius: radiusFromMass(1) });
+  addBody(w, { pos: [1, 0, 0], vel: [0, 2 * Math.PI, 0], mass: 3e-6, radius: radiusFromMass(3e-6) });
+  computeAccelerations(w);
+}
+initWorld();
 
 window.addEventListener('resize', renderer.resize);
 renderer.resize();
@@ -54,6 +59,22 @@ stepBtn.addEventListener('click', () => { setPaused(true); stepOnce = true; });
 speedSlider.addEventListener('input', () => {
   speed = Math.pow(10, Number(speedSlider.value));
   speedLabel.textContent = speed.toFixed(speed < 1 ? 2 : 1) + ' yr/s';
+});
+
+// Selection (declared early because Restart uses it)
+let selected = -1;
+
+// Integrator choice and restart
+let method = 'verlet';
+document.getElementById('method').addEventListener('change', (e) => {
+  method = e.target.value;
+  resetBaseline();
+});
+
+document.getElementById('btn-restart').addEventListener('click', () => {
+  initWorld();
+  selected = -1;
+  resetBaseline();
 });
 
 window.addEventListener('keydown', (e) => {
@@ -98,8 +119,6 @@ function launchVelocity(start, current) {
 }
 
 // ---- Picking: nearest body to the click, in screen space ----
-let selected = -1;
-
 function pickBody(sx, sy) {
   let best = -1, bestScore = Infinity;
   for (let i = 0; i < w.n; i++) {
@@ -194,7 +213,7 @@ function updateConservation() {
   html += row('Momentum drift', pct(dP));
   html += row('Ang. momentum |L|', vmag(d.L).toExponential(4));
   html += row('Ang. mom. drift', pct(dL));
-  html += `<div class="sec">Baseline resets when you launch a body</div>`;
+  html += `<div class="sec">Baseline resets on launch or merge</div>`;
   consEl.innerHTML = html;
 }
 
@@ -263,9 +282,9 @@ canvas.addEventListener('pointerup', (e) => {
       selected = pickBody(e.clientX, e.clientY);
     } else {
       const vel = launchVelocity(aim.start, aim.current);
-      addBody(w, { pos: aim.start, vel, mass: LAUNCH_MASS });
+      addBody(w, { pos: aim.start, vel, mass: LAUNCH_MASS, radius: radiusFromMass(LAUNCH_MASS) });
       computeAccelerations(w);
-      resetBaseline();            // the system changed, so restart the drift measurement
+      resetBaseline();
     }
   }
   mode = null;
@@ -284,6 +303,18 @@ let last = performance.now();
 let acc = 0;
 let lastInfo = 0;
 
+const flashes = [];            // visual events from merges, consumed by the renderer
+const COLLISION_SCALE = 150;   // physical radii are tiny; this makes merges happen at visible distances
+
+function runCollisions() {
+  const events = handleCollisions(w, COLLISION_SCALE);
+  if (events.length > 0) {
+    for (const ev of events) flashes.push(ev);
+    if (selected >= w.n) selected = -1;
+    resetBaseline();           // merging changes the system's totals
+  }
+}
+
 function frame(now) {
   const real = Math.min((now - last) / 1000, 0.1);
   last = now;
@@ -292,20 +323,23 @@ function frame(now) {
 
   let substeps = 0;
   if (stepOnce) {
-    stepVerlet(w, DT);
+    step(w, DT, method);
     renderer.recordTrails(w);
+    runCollisions();
     stepOnce = false;
   }
   while (acc >= DT && substeps < 200) {
-    stepVerlet(w, DT);
+    step(w, DT, method);
     renderer.recordTrails(w);
+    runCollisions();
     acc -= DT;
     substeps++;
   }
   if (substeps === 200) acc = 0;
 
   const orbit = (selected >= 0 && selected < w.n) ? sampleOrbit(w, selected) : null;
-  renderer.render(cam, w, aim, selected, orbit);
+  renderer.render(cam, w, aim, selected, orbit, flashes);
+  flashes.length = 0;          // the renderer copies what it needs; this prevents the list growing forever
 
   if (now - lastInfo > 100) {
     updateInfo();

@@ -111,3 +111,12 @@ canvas {
   color: #8fa0d0;
   line-height: 1.4;
 }
+
+#toolbar select {
+  background: rgba(60, 80, 140, 0.35);
+  color: #cfd8ff;
+  border: 1px solid rgba(120, 150, 255, 0.35);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+}

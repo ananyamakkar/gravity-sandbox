@@ -19,6 +19,7 @@ export function createRenderer(canvas) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
+  // Depth fog: 1 = fully visible, lower = farther away.
   function fog(cam, p) {
     const z = p.depth - cam.distance;
     const f = 1 - z / (cam.distance * 2);
@@ -159,43 +160,6 @@ export function createRenderer(canvas) {
     }
   }
 
-  // Small labeled marker on the orbit (periapsis, apoapsis, nodes)
-  function drawMarker(cam, pt, label, color) {
-    if (!pt) return;
-    const p = project(cam, pt, width, height);
-    if (!p) return;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.fillText(label, p.x + 7, p.y + 4);
-  }
-
-  // The selected body's analytic orbit: ellipse + markers
-  function drawOrbit(cam, orbit) {
-    if (!orbit || orbit.points.length < 2) return;
-
-    ctx.strokeStyle = 'rgba(255, 220, 120, 0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    let started = false;
-    for (const pt of orbit.points) {
-      const q = project(cam, pt, width, height);
-      if (!q) { started = false; continue; }
-      if (!started) { ctx.moveTo(q.x, q.y); started = true; }
-      else ctx.lineTo(q.x, q.y);
-    }
-    // Close the loop only for bound orbits (hyperbolas stay open)
-    if (orbit.apoapsis) ctx.closePath();
-    ctx.stroke();
-
-    drawMarker(cam, orbit.periapsis, 'Pe', '#ffd27a');
-    drawMarker(cam, orbit.apoapsis, 'Ap', '#ffd27a');
-    drawMarker(cam, orbit.nodeUp, '☊ asc', '#7af0a8');
-    drawMarker(cam, orbit.nodeDown, '☋ desc', '#f07a9a');
-  }
-
   // Vertical line from the body to the z=0 plane, ending in a shadow dot
   function drawDropLine(cam, x, y, z, p) {
     if (Math.abs(z) < 1e-4) return;
@@ -220,14 +184,14 @@ export function createRenderer(canvas) {
     ctx.fill();
   }
 
-  function render(cam, w, aim, selected = -1, orbit = null) {
+  function render(cam, w, aim, selected = -1) {
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
     drawGrid(cam);
-    drawOrbit(cam, orbit);
     drawTrails(cam, w);
     drawAim(cam, aim);
 
+    // Project everything, then sort far -> near (painter's algorithm)
     const items = [];
     for (let i = 0; i < w.n; i++) {
       const x = w.px[i], y = w.py[i], z = w.pz[i];
@@ -252,6 +216,7 @@ export function createRenderer(canvas) {
       ctx.fill();
       ctx.globalAlpha = 1;
 
+      // Selection ring
       if (i === selected) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.lineWidth = 1.5;
