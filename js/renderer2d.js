@@ -1,9 +1,9 @@
-import { project } from './camera.js';
+import { project, viewMatrix } from './camera.js';
+import { mulMatVec } from './vec3.js';
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   let width = 0, height = 0;
-
   const SHOW_DROP_LINES = true;
 
   // Visual radii in AU (exaggerated so they're visible)
@@ -23,6 +23,41 @@ export function createRenderer(canvas) {
     const z = p.depth - cam.distance;
     const f = 1 - z / (cam.distance * 2);
     return Math.min(1, Math.max(0.3, f));
+  }
+
+  // ---- Starfield: fixed directions on a distant sphere ----
+  const STAR_COUNT = 2500;
+  const bgStars = [];
+  (function makeStarfield() {
+    let seed = 12345; // seeded, so the sky is the same every load
+    const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    for (let i = 0; i < STAR_COUNT; i++) {
+      const z = rand() * 2 - 1;
+      const a = rand() * Math.PI * 2;
+      const r = Math.sqrt(1 - z * z);
+      const b = Math.pow(rand(), 3); // most stars dim, a few bright
+      bgStars.push({
+        d: [r * Math.cos(a), r * Math.sin(a), z],
+        size: 0.5 + b * 1.4,
+        alpha: 0.25 + b * 0.75,
+        tint: rand(),
+      });
+    }
+  })();
+
+  function drawStarfield(cam) {
+    const m = viewMatrix(cam);
+    const focal = (height / 2) / Math.tan(cam.fov / 2);
+    for (const s of bgStars) {
+      const q = mulMatVec(m, s.d);
+      if (q[2] < 0.1) continue; // behind the camera
+      const x = width / 2 + (q[0] / q[2]) * focal;
+      const y = height / 2 - (q[1] / q[2]) * focal;
+      if (x < 0 || x > width || y < 0 || y > height) continue;
+      const c = s.tint < 0.3 ? '170,190,255' : s.tint < 0.7 ? '255,255,255' : '255,225,190';
+      ctx.fillStyle = `rgba(${c},${s.alpha})`;
+      ctx.fillRect(x, y, s.size, s.size);
+    }
   }
 
   function drawRing(cam, radius, color) {
@@ -71,9 +106,8 @@ export function createRenderer(canvas) {
   }
 
   function recordTrails(w) {
-     if (Math.abs(w.time - lastRecord) < TRAIL_DT) return;
+    if (Math.abs(w.time - lastRecord) < TRAIL_DT) return;
     lastRecord = w.time;
-
     for (let i = 0; i < w.n; i++) {
       if (!trails[i]) {
         trails[i] = {
@@ -98,7 +132,6 @@ export function createRenderer(canvas) {
     for (let i = 0; i < w.n; i++) {
       const t = trails[i];
       if (!t || t.count < 2) continue;
-
       const start = (t.head - t.count + TRAIL_LEN) % TRAIL_LEN;
       let prev = null;
       for (let k = 0; k <= t.count; k++) {
@@ -130,7 +163,6 @@ export function createRenderer(canvas) {
     const a = project(cam, aim.start, width, height);
     const b = project(cam, aim.current, width, height);
     if (!a || !b) return;
-
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 6]);
@@ -139,12 +171,10 @@ export function createRenderer(canvas) {
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
     ctx.setLineDash([]);
-
     ctx.fillStyle = '#6cf';
     ctx.beginPath();
     ctx.arc(a.x, a.y, 4, 0, Math.PI * 2);
     ctx.fill();
-
     if (aim.path) {
       ctx.strokeStyle = 'rgba(108, 204, 255, 0.55)';
       ctx.lineWidth = 1.5;
@@ -178,7 +208,6 @@ export function createRenderer(canvas) {
   // The selected body's analytic orbit: ellipse + markers
   function drawOrbit(cam, orbit) {
     if (!orbit || orbit.points.length < 2) return;
-
     ctx.strokeStyle = 'rgba(255, 220, 120, 0.55)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -191,7 +220,6 @@ export function createRenderer(canvas) {
     }
     if (orbit.apoapsis) ctx.closePath();
     ctx.stroke();
-
     drawMarker(cam, orbit.periapsis, 'Pe', '#ffd27a');
     drawMarker(cam, orbit.apoapsis, 'Ap', '#ffd27a');
     drawMarker(cam, orbit.nodeUp, '☊ asc', '#7af0a8');
@@ -213,7 +241,6 @@ export function createRenderer(canvas) {
     ctx.moveTo(p.x, p.y);
     ctx.lineTo(g.x, g.y);
     ctx.stroke();
-
     ctx.fillStyle = above
       ? `rgba(120, 220, 255, ${0.6 * f})`
       : `rgba(255, 130, 200, ${0.6 * f})`;
@@ -224,7 +251,7 @@ export function createRenderer(canvas) {
 
   // ---- Merge flashes: glow + expanding particle burst ----
   const activeFlashes = [];
-  const FLASH_TIME = 700;   // milliseconds
+  const FLASH_TIME = 700; // milliseconds
 
   function addFlashes(events) {
     const now = performance.now();
@@ -245,14 +272,11 @@ export function createRenderer(canvas) {
       const f = activeFlashes[k];
       const t = (now - f.born) / FLASH_TIME;
       if (t >= 1) { activeFlashes.splice(k, 1); continue; }
-
       const p = project(cam, [f.x, f.y, f.z], width, height);
       if (!p) continue;
-
       const base = f.big ? 40 : 22;
       const R = base * (0.3 + t);
       const alpha = 1 - t;
-
       const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, R);
       g.addColorStop(0, `rgba(255, 240, 200, ${alpha})`);
       g.addColorStop(0.4, `rgba(255, 170, 80, ${alpha * 0.5})`);
@@ -261,7 +285,6 @@ export function createRenderer(canvas) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, R, 0, Math.PI * 2);
       ctx.fill();
-
       ctx.fillStyle = `rgba(255, 220, 160, ${alpha})`;
       for (const q of f.parts) {
         const d = base * 1.5 * q.s * t;
@@ -273,11 +296,94 @@ export function createRenderer(canvas) {
     ctx.globalCompositeOperation = 'source-over';
   }
 
+  // ---- Stars: mass-based colour + additive glow ----
+  // 0.1 Msun = red, 1 = yellow-white, 10 = blue-white
+  function starColor(m) {
+    const t = Math.min(1, Math.max(0, (Math.log10(m) + 1) / 2));
+    const lerp = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+    const red = [255, 120, 80], yellow = [255, 240, 210], blue = [160, 195, 255];
+    return t < 0.5 ? lerp(red, yellow, t / 0.5) : lerp(yellow, blue, (t - 0.5) / 0.5);
+  }
+
+  function drawStar(p, mass, r, f) {
+    const [cr, cg, cb] = starColor(mass);
+    const pulse = 1 + 0.06 * Math.sin(performance.now() / 600 + mass * 10);
+    const halo = r * 6 * pulse;
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Outer glow / corona
+    let g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, halo);
+    g.addColorStop(0,    `rgba(${cr},${cg},${cb},${0.55 * f})`);
+    g.addColorStop(0.25, `rgba(${cr},${cg},${cb},${0.20 * f})`);
+    g.addColorStop(1,    `rgba(${cr},${cg},${cb},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, halo, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bright core
+    g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 1.3);
+    g.addColorStop(0,   `rgba(255,255,255,${f})`);
+    g.addColorStop(0.6, `rgba(${cr},${cg},${cb},${f})`);
+    g.addColorStop(1,   `rgba(${cr},${cg},${cb},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r * 1.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // ---- Planets: lit spheres ----
+  // The star pulling hardest on body i (largest m/d^2), among bodies > 0.05 Msun
+  function findLight(w, i) {
+    let best = -1, bestPull = 0;
+    for (let j = 0; j < w.n; j++) {
+      if (j === i || w.mass[j] <= 0.05) continue;
+      const dx = w.px[j] - w.px[i], dy = w.py[j] - w.py[i], dz = w.pz[j] - w.pz[i];
+      const pull = w.mass[j] / (dx * dx + dy * dy + dz * dz + 1e-12);
+      if (pull > bestPull) { bestPull = pull; best = j; }
+    }
+    return best;
+  }
+
+  function drawPlanet(cam, w, i, p, r, f) {
+    // Light direction in camera space (defaults to "from the viewer")
+    let lx = 0, ly = 0, lz = -1;
+    const s = findLight(w, i);
+    if (s >= 0) {
+      const d = mulMatVec(viewMatrix(cam), [
+        w.px[s] - w.px[i], w.py[s] - w.py[i], w.pz[s] - w.pz[i],
+      ]);
+      const len = Math.hypot(d[0], d[1], d[2]) || 1;
+      lx = d[0] / len; ly = d[1] / len; lz = d[2] / len;
+    }
+    // lz = -1: star on the camera's side (fully lit). lz = +1: star behind (dark)
+    const k = 0.25 + 0.75 * (0.5 - 0.5 * lz);
+    const shade = (rgb, mul) => `rgb(${rgb.map(v => Math.round(v * mul)).join(',')})`;
+    const base = [90, 170, 255];
+
+    const hx = p.x + lx * r * 0.55;
+    const hy = p.y - ly * r * 0.55; // screen y is flipped
+    const g = ctx.createRadialGradient(hx, hy, r * 0.05, p.x, p.y, r * 1.05);
+    g.addColorStop(0,    shade([235, 248, 255], k));
+    g.addColorStop(0.45, shade(base, k));
+    g.addColorStop(1,    shade([10, 18, 40], 1));
+
+    ctx.globalAlpha = f;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
   function render(cam, w, aim, selected = -1, orbit = null, flashes = []) {
     addFlashes(flashes);
-
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
+    drawStarfield(cam);
     drawGrid(cam);
     drawOrbit(cam, orbit);
     drawTrails(cam, w);
@@ -295,18 +401,12 @@ export function createRenderer(canvas) {
     for (const it of items) {
       const { i, x, y, z, p } = it;
       const isStar = w.mass[i] > 0.05;
-
       if (SHOW_DROP_LINES) drawDropLine(cam, x, y, z, p);
-
       const visRadius = isStar ? STAR_VIS_RADIUS : PLANET_VIS_RADIUS;
       const r = Math.max(2, visRadius * p.scale);
-
-      ctx.globalAlpha = fog(cam, p);
-      ctx.fillStyle = isStar ? 'orange' : '#6cf';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      const f = fog(cam, p);
+      if (isStar) drawStar(p, w.mass[i], r, f);
+      else drawPlanet(cam, w, i, p, r, f);
 
       if (i === selected) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
