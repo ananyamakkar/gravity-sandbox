@@ -30,6 +30,9 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-sizing: border-box;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
 }
 
 #info {
@@ -43,7 +46,7 @@ canvas {
 
 #cons {
   bottom: 12px;
-  left: 12px;
+  right: 12px;
   width: 270px;
   line-height: 1.5;
   font-size: 12px;
@@ -70,6 +73,7 @@ canvas {
 }
 
 #info .row span:first-child, #cons .row span:first-child { color: #9fb0e0; }
+
 #info .row span:last-child, #cons .row span:last-child {
   color: #fff;
   font-variant-numeric: tabular-nums;

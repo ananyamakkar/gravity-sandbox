@@ -21,6 +21,7 @@ resetCamera();
 // ---- World ----
 const w = createWorld();
 let currentPreset = 'earth';
+
 function initWorld() {
   const p = loadPreset(w, currentPreset);
   PRESET_DISTANCE = p.distance;
@@ -42,8 +43,8 @@ function resetBaseline() { base = diagnostics(w); }
 
 // ---- Time controls ----
 const DT = 0.0005;
-const MAX_SUBSTEPS = 1000;   // raised from 200 so close encounters can use tiny steps
-let speed = 0.5;            // simulated years per real second
+const MAX_SUBSTEPS = 1000; // raised from 200 so close encounters can use tiny steps
+let speed = 0.5;           // simulated years per real second
 let paused = false;
 let stepOnce = false;
 
@@ -74,13 +75,11 @@ document.getElementById('method').addEventListener('change', (e) => {
   method = e.target.value;
   resetBaseline();
 });
-
 document.getElementById('btn-restart').addEventListener('click', () => {
   initWorld();
   selected = -1;
   resetBaseline();
 });
-
 document.getElementById('preset').addEventListener('change', (e) => {
   currentPreset = e.target.value;
   initWorld();
@@ -91,6 +90,7 @@ document.getElementById('preset').addEventListener('change', (e) => {
 // Reverse time and adaptive timestep
 let reversed = false;
 let adaptive = true;
+
 const revBtn = document.getElementById('btn-rev');
 revBtn.addEventListener('click', () => {
   reversed = !reversed;
@@ -111,7 +111,6 @@ window.addEventListener('keydown', (e) => {
 const inclSlider = document.getElementById('incl');
 const inclLabel = document.getElementById('incl-val');
 let inclination = 0;
-
 inclSlider.addEventListener('input', () => {
   inclination = Number(inclSlider.value);
   inclLabel.textContent = inclination + '°';
@@ -126,6 +125,19 @@ const orthoBtn = document.getElementById('btn-ortho');
 orthoBtn.addEventListener('click', () => {
   cam.ortho = !cam.ortho;
   orthoBtn.textContent = cam.ortho ? 'Orthographic' : 'Perspective';
+});
+
+// ---- UI: visual vs true scale ----
+let trueScale = false;
+const scaleBtn = document.getElementById('btn-scale');
+const scaleNote = document.getElementById('scale-note');
+scaleBtn.addEventListener('click', () => {
+  trueScale = !trueScale;
+  renderer.setTrueScale(trueScale);
+  scaleBtn.textContent = trueScale ? 'True scale' : 'Visual scale';
+  scaleNote.textContent = trueScale
+    ? 'True sizes · merges only on real contact'
+    : 'Sizes exaggerated · merges at 30× radius';
 });
 
 // ---- Launch velocity ----
@@ -158,7 +170,6 @@ function pickBody(sx, sy) {
 
 // ---- Info panel ----
 const infoEl = document.getElementById('info');
-
 const fmt = (x, d = 3) => (x === null || x === undefined ? '—' : Number(x).toFixed(d));
 const row = (k, v) => `<div class="row"><span>${k}</span><span>${v}</span></div>`;
 
@@ -168,7 +179,6 @@ function updateInfo() {
     return;
   }
   infoEl.hidden = false;
-
   const i = selected;
   const el = orbitalElements(w, i);
   const earthMasses = w.mass[i] / 3.003e-6;
@@ -210,7 +220,6 @@ function updateInfo() {
 
 // ---- Conservation panel ----
 const consEl = document.getElementById('cons');
-
 const vmag = (v) => Math.hypot(v[0], v[1], v[2]);
 const pct = (x) => {
   const p = x * 100;
@@ -219,12 +228,9 @@ const pct = (x) => {
 
 function updateConservation() {
   const d = diagnostics(w);
-
   const dE = base.energy !== 0 ? (d.energy - base.energy) / Math.abs(base.energy) : 0;
-
   const dPvec = [d.P[0] - base.P[0], d.P[1] - base.P[1], d.P[2] - base.P[2]];
   const dP = base.pscale > 0 ? vmag(dPvec) / base.pscale : 0;
-
   const dLvec = [d.L[0] - base.L[0], d.L[1] - base.L[1], d.L[2] - base.L[2]];
   const L0 = vmag(base.L);
   const dL = L0 > 0 ? vmag(dLvec) / L0 : 0;
@@ -326,34 +332,34 @@ let last = performance.now();
 let acc = 0;
 let lastInfo = 0;
 
-const flashes = [];            // visual events from merges, consumed by the renderer
-const COLLISION_SCALE = 30;    // physical radii are tiny; this makes merges happen at visible distances
+const flashes = [];         // visual events from merges, consumed by the renderer
+const COLLISION_SCALE = 30; // physical radii are tiny; this makes merges happen at visible distances
 
 function runCollisions() {
-  const events = handleCollisions(w, COLLISION_SCALE);
+  const events = handleCollisions(w, trueScale ? 1 : COLLISION_SCALE);
   if (events.length > 0) {
     for (const ev of events) flashes.push(ev);
     if (selected >= w.n) selected = -1;
-    resetBaseline();           // merging changes the system's totals
+    resetBaseline(); // merging changes the system's totals
   }
 }
 
 function frame(now) {
   const real = Math.min((now - last) / 1000, 0.1);
   last = now;
-
   if (!paused) acc += real * speed;
 
   const dir = reversed ? -1 : 1;
   const stepDt = () => (adaptive ? Math.min(DT, adaptiveDt(w)) : DT);
-
   let substeps = 0;
+
   if (stepOnce) {
     step(w, dir * stepDt(), method);
     renderer.recordTrails(w);
     if (!reversed) runCollisions();
     stepOnce = false;
   }
+
   while (substeps < MAX_SUBSTEPS) {
     const dt = stepDt();
     if (acc < dt) break;
