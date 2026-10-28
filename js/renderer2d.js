@@ -65,12 +65,13 @@ export function createRenderer(canvas) {
   const trails = [];
   let lastRecord = -Infinity;
 
+  function clearTrails() {
+    trails.length = 0;
+    lastRecord = -Infinity;
+  }
+
   function recordTrails(w) {
-    if (w.time < lastRecord) {
-      lastRecord = -Infinity;
-      trails.length = 0;                 // sim was restarted: clear old trails
-    }
-    if (w.time - lastRecord < TRAIL_DT) return;
+     if (Math.abs(w.time - lastRecord) < TRAIL_DT) return;
     lastRecord = w.time;
 
     for (let i = 0; i < w.n; i++) {
@@ -319,5 +320,5 @@ export function createRenderer(canvas) {
     drawFlashes(cam);
   }
 
-  return { resize, render, recordTrails };
+  return { resize, render, recordTrails, clearTrails };
 }

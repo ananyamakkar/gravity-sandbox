@@ -258,3 +258,21 @@ function mergeBodies(w, i, j, events) {
   w.n--;
   computeAccelerations(w);
 }
+
+// Safe timestep from the closest pair: a fraction (eta) of the pair's
+// free-fall timescale sqrt(d^3 / (G (m1 + m2))).
+export function adaptiveDt(w, eta = 0.02) {
+  const { n, px, py, pz, mass } = w;
+  const eps2 = w.softening * w.softening;
+  let t2min = Infinity;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const dx = px[j] - px[i], dy = py[j] - py[i], dz = pz[j] - pz[i];
+      const d2 = dx * dx + dy * dy + dz * dz + eps2;
+      const t2 = (d2 * Math.sqrt(d2)) / (G * (mass[i] + mass[j]));
+      if (t2 < t2min) t2min = t2;
+    }
+  }
+  return Math.max(1e-6, eta * Math.sqrt(t2min));
+}
+

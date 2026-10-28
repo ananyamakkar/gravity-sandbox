@@ -120,3 +120,8 @@ canvas {
   padding: 4px 6px;
   font-size: 12px;
 }
+
+#toolbar label.check {
+  flex-direction: row;
+  align-items: center;
+}

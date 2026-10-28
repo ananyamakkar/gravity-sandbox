@@ -1,6 +1,6 @@
 import { createCamera, project, unproject } from './camera.js';
 import { createRenderer } from './renderer2d.js';
-import { createWorld, addBody, computeAccelerations, step, predictPath, diagnostics, radiusFromMass, handleCollisions } from './physics.js';
+import { createWorld, addBody, computeAccelerations, step, predictPath, diagnostics, radiusFromMass, handleCollisions, adaptiveDt } from './physics.js';
 import { orbitalElements, sampleOrbit, AU_YR_TO_KMS } from './orbits.js';
 import { loadPreset } from './presets.js';
 
@@ -26,6 +26,7 @@ function initWorld() {
   PRESET_DISTANCE = p.distance;
   cam.target = [0, 0, 0];
   cam.distance = p.distance;
+  renderer.clearTrails();
 }
 initWorld();
 
@@ -41,6 +42,7 @@ function resetBaseline() { base = diagnostics(w); }
 
 // ---- Time controls ----
 const DT = 0.0005;
+const MAX_SUBSTEPS = 1000;   // raised from 200 so close encounters can use tiny steps
 let speed = 0.5;            // simulated years per real second
 let paused = false;
 let stepOnce = false;
@@ -84,6 +86,18 @@ document.getElementById('preset').addEventListener('change', (e) => {
   initWorld();
   selected = -1;
   resetBaseline();
+});
+
+// Reverse time and adaptive timestep
+let reversed = false;
+let adaptive = true;
+const revBtn = document.getElementById('btn-rev');
+revBtn.addEventListener('click', () => {
+  reversed = !reversed;
+  revBtn.textContent = reversed ? 'Forward' : 'Reverse';
+});
+document.getElementById('adaptive').addEventListener('change', (e) => {
+  adaptive = e.target.checked;
 });
 
 window.addEventListener('keydown', (e) => {
@@ -330,21 +344,26 @@ function frame(now) {
 
   if (!paused) acc += real * speed;
 
+  const dir = reversed ? -1 : 1;
+  const stepDt = () => (adaptive ? Math.min(DT, adaptiveDt(w)) : DT);
+
   let substeps = 0;
   if (stepOnce) {
-    step(w, DT, method);
+    step(w, dir * stepDt(), method);
     renderer.recordTrails(w);
-    runCollisions();
+    if (!reversed) runCollisions();
     stepOnce = false;
   }
-  while (acc >= DT && substeps < 200) {
-    step(w, DT, method);
+  while (substeps < MAX_SUBSTEPS) {
+    const dt = stepDt();
+    if (acc < dt) break;
+    step(w, dir * dt, method);
     renderer.recordTrails(w);
-    runCollisions();
-    acc -= DT;
+    if (!reversed) runCollisions();
+    acc -= dt;
     substeps++;
   }
-  if (substeps === 200) acc = 0;
+  if (substeps === MAX_SUBSTEPS) acc = 0;
 
   const orbit = (selected >= 0 && selected < w.n) ? sampleOrbit(w, selected) : null;
   renderer.render(cam, w, aim, selected, orbit, flashes);
