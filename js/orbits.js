@@ -1,5 +1,5 @@
 import { G } from './physics.js';
-import { cross, dot, length } from './vec3.js';
+import { cross, dot, length, normalize, add, scale } from './vec3.js';
 
 export const AU_YR_TO_KMS = 4.740470446;   // 1 AU/yr in km/s
 const TWO_PI = Math.PI * 2;
@@ -37,11 +37,12 @@ export function orbitalElements(w, i) {
   const h = cross(r, v);
   const hMag = length(h);
 
-  const energy = (vMag * vMag) / 2 - mu / rMag;          // specific orbital energy
+  const energy = (vMag * vMag) / 2 - mu / rMag;
+  const vxh = cross(v, h);
   const eVec = [
-    cross(v, h)[0] / mu - r[0] / rMag,
-    cross(v, h)[1] / mu - r[1] / rMag,
-    cross(v, h)[2] / mu - r[2] / rMag,
+    vxh[0] / mu - r[0] / rMag,
+    vxh[1] / mu - r[1] / rMag,
+    vxh[2] / mu - r[2] / rMag,
   ];
   const ecc = length(eVec);
   const bound = energy < 0;
@@ -52,15 +53,13 @@ export function orbitalElements(w, i) {
   else if (ecc < 1) type = 'elliptical';
   else type = 'hyperbolic';
 
-  // Semi-major axis (negative for hyperbolic, meaningless for parabolic)
   const a = Math.abs(energy) < 1e-12 ? Infinity : -mu / (2 * energy);
   const peri = (hMag * hMag) / mu / (1 + ecc);
   const apo = bound ? a * (1 + ecc) : null;
-  const period = bound ? TWO_PI * Math.sqrt((a * a * a) / mu) : null;   // years
+  const period = bound ? TWO_PI * Math.sqrt((a * a * a) / mu) : null;
 
   const incl = Math.acos(Math.min(1, Math.max(-1, h[2] / hMag)));
 
-  // Node vector n = z_hat x h. Undefined for a flat (i ~ 0) orbit.
   const n = [-h[1], h[0], 0];
   const nMag = length(n);
   const hasNode = nMag > 1e-9 * hMag;
@@ -94,4 +93,76 @@ export function orbitalElements(w, i) {
     nu: deg(nu),
     retrograde: incl > Math.PI / 2,
   };
+}
+
+// Samples the selected body's current orbit as 3D points (world space).
+// Returns { points, periapsis, apoapsis, nodeUp, nodeDown } or null.
+export function sampleOrbit(w, i, count = 180) {
+  const j = findDominant(w, i);
+  if (j < 0) return null;
+
+  const center = [w.px[j], w.py[j], w.pz[j]];
+  const r = [w.px[i] - center[0], w.py[i] - center[1], w.pz[i] - center[2]];
+  const v = [w.vx[i] - w.vx[j], w.vy[i] - w.vy[j], w.vz[i] - w.vz[j]];
+  const mu = G * (w.mass[i] + w.mass[j]);
+
+  const rMag = length(r);
+  const h = cross(r, v);
+  const hMag = length(h);
+  if (hMag < 1e-12) return null;                 // straight-line fall, no orbit plane
+
+  const vxh = cross(v, h);
+  let eVec = [
+    vxh[0] / mu - r[0] / rMag,
+    vxh[1] / mu - r[1] / rMag,
+    vxh[2] / mu - r[2] / rMag,
+  ];
+  let ecc = length(eVec);
+
+  const hHat = normalize(h);
+  // For near-circular orbits the periapsis direction is undefined: use r itself
+  let pHat = ecc > 1e-6 ? normalize(eVec) : normalize(r);
+  if (ecc <= 1e-6) ecc = 0;
+  const qHat = cross(hHat, pHat);
+
+  const ell = (hMag * hMag) / mu;                // semi-latus rectum
+
+  // Range of true anomaly: full circle if bound, else limited by the asymptotes
+  let nuMax = Math.PI;
+  if (ecc >= 1) nuMax = Math.acos(-1 / ecc) * 0.98;
+
+  const pointAt = (nu) => {
+    const rad = ell / (1 + ecc * Math.cos(nu));
+    return add(center, add(scale(pHat, rad * Math.cos(nu)), scale(qHat, rad * Math.sin(nu))));
+  };
+
+  const points = [];
+  for (let k = 0; k <= count; k++) {
+    const nu = -nuMax + (2 * nuMax * k) / count;
+    const rad = ell / (1 + ecc * Math.cos(nu));
+    if (rad > 200) continue;                     // skip absurdly far hyperbolic points
+    points.push(pointAt(nu));
+  }
+
+  const periapsis = pointAt(0);
+  const apoapsis = ecc < 1 ? pointAt(Math.PI) : null;
+
+  // Nodes: where the orbit crosses z = 0. Direction n = z_hat x h.
+  let nodeUp = null, nodeDown = null;
+  const nVec = [-h[1], h[0], 0];
+  if (length(nVec) > 1e-9 * hMag) {
+    // True anomaly of the ascending node: angle from periapsis to the node direction
+    const nHat = normalize(nVec);
+    const cosNu = dot(nHat, pHat);
+    const sinNu = dot(nHat, qHat);
+    const nuNode = Math.atan2(sinNu, cosNu);
+    const tryNode = (nu) => {
+      if (ecc >= 1 && Math.cos(nu) <= -1 / ecc) return null;   // not on a hyperbola
+      return pointAt(nu);
+    };
+    nodeUp = tryNode(nuNode);
+    nodeDown = tryNode(nuNode + Math.PI);
+  }
+
+  return { points, periapsis, apoapsis, nodeUp, nodeDown, center };
 }

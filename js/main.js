@@ -1,7 +1,7 @@
 import { createCamera, project, unproject } from './camera.js';
 import { createRenderer } from './renderer2d.js';
 import { createWorld, addBody, computeAccelerations, stepVerlet, predictPath } from './physics.js';
-import { orbitalElements, AU_YR_TO_KMS } from './orbits.js';
+import { orbitalElements, sampleOrbit, AU_YR_TO_KMS } from './orbits.js';
 
 const canvas = document.getElementById('view');
 const renderer = createRenderer(canvas);
@@ -267,7 +267,8 @@ function frame(now) {
   }
   if (substeps === 200) acc = 0;
 
-  renderer.render(cam, w, aim, selected);
+  const orbit = (selected >= 0 && selected < w.n) ? sampleOrbit(w, selected) : null;
+  renderer.render(cam, w, aim, selected, orbit);
 
   if (now - lastInfo > 100) {
     updateInfo();
