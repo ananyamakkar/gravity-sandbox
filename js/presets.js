@@ -39,31 +39,30 @@ export const PRESETS = {
       planet(w, { a: 1, mass: EARTH });
     },
   },
-
   solar: {
     name: 'Inner solar system',
-    distance: 5,
+    distance: 12,
     build(w) {
       add(w, SUN, [0, 0, 0], [0, 0, 0]);
-      planet(w, { a: 0.387, mass: 1.66e-7, phi: 0.5 });   // Mercury
-      planet(w, { a: 0.723, mass: 2.45e-6, phi: 2.2 });   // Venus
-      planet(w, { a: 1.0,   mass: EARTH,   phi: 4.0 });   // Earth
-      planet(w, { a: 1.524, mass: 3.2e-7,  phi: 5.5 });   // Mars
+      planet(w, { a: 0.387, mass: 1.66e-7, phi: 0.5 }); // Mercury
+      planet(w, { a: 0.723, mass: 2.45e-6, phi: 2.2 }); // Venus
+      planet(w, { a: 1.0, mass: EARTH, phi: 4.0 });     // Earth
+      planet(w, { a: 1.524, mass: 3.2e-7, phi: 5.5 });  // Mars
+      planet(w, { a: 5.2, mass: 9.5e-4, phi: 1.0 });    // Jupiter (banded)
+      planet(w, { a: 9.5, mass: 2.9e-4, phi: 3.5 });    // Saturn (banded + rings)
     },
   },
-
   inclined: {
     name: 'Inclined orbits',
     distance: 8,
     build(w) {
       add(w, SUN, [0, 0, 0], [0, 0, 0]);
-      planet(w, { a: 1.0, mass: EARTH, phi: 0,   incl: 20 });
+      planet(w, { a: 1.0, mass: EARTH, phi: 0, incl: 20 });
       planet(w, { a: 1.6, mass: EARTH, phi: 1.5, incl: 45 });
       planet(w, { a: 2.3, mass: EARTH, phi: 3.0, incl: 70 });
-      planet(w, { a: 3.0, mass: EARTH, phi: 4.5, incl: 160 });   // retrograde
+      planet(w, { a: 3.0, mass: EARTH, phi: 4.5, incl: 160 }); // retrograde
     },
   },
-
   polar: {
     name: 'Polar orbit',
     distance: 5,
@@ -73,7 +72,6 @@ export const PRESETS = {
       planet(w, { a: 0.6, mass: EARTH, phi: 1.0, incl: 90 });
     },
   },
-
   binary: {
     name: 'Binary star + planet',
     distance: 26,
@@ -86,7 +84,6 @@ export const PRESETS = {
       planet(w, { M: 1.0, a: 8, mass: EARTH, phi: 1.0 });
     },
   },
-
   figure8: {
     name: 'Figure-eight (3 stars)',
     distance: 10,
@@ -100,7 +97,6 @@ export const PRESETS = {
       add(w, 1, [0, 0, 0], [v3[0] * vs, v3[1] * vs, 0]);
     },
   },
-
   empty: {
     name: 'Empty space + one star',
     distance: 8,

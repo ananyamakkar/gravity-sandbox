@@ -1,5 +1,5 @@
 import { project, viewMatrix } from './camera.js';
-import { mulMatVec } from './vec3.js';
+import { mulMat, mulMatVec } from './vec3.js';
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
@@ -9,6 +9,11 @@ export function createRenderer(canvas) {
   // Visual radii in AU (exaggerated so they're visible)
   const STAR_VIS_RADIUS = 0.1;
   const PLANET_VIS_RADIUS = 0.03;
+  const GIANT_VIS_RADIUS = 0.06;
+
+  const GIANT_MASS = 5e-5;   // above this: gas giant (bands)
+  const RINGED_MASS = 2e-4;  // above this: also gets rings (Saturn-like)
+  const ROCKY_MASS = 1e-6;   // below this: small rocky body
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
@@ -140,9 +145,9 @@ export function createRenderer(canvas) {
   function trailColor(w, i) {
     const m = w.mass[i];
     if (m > 0.05) return starColor(m);        // star
-    if (m > 5e-5) return [255, 190, 120];     // gas giant: tan/orange
-    if (m > 1e-6) return [110, 200, 255];     // Earth-sized: blue
-    return [190, 190, 200];                   // small rocks: grey
+    if (m > GIANT_MASS) return [255, 190, 120]; // gas giant: tan/orange
+    if (m > ROCKY_MASS) return [110, 200, 255]; // Earth-sized: blue
+    return [190, 190, 200];                     // small rocks: grey
   }
 
   function drawTrails(cam, w) {
@@ -345,7 +350,7 @@ export function createRenderer(canvas) {
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  // ---- Planets: lit spheres ----
+  // ---- Planets: lit spheres, with bands and rings for giants ----
   // The star pulling hardest on body i (largest m/d^2), among bodies > 0.05 Msun
   function findLight(w, i) {
     let best = -1, bestPull = 0;
@@ -358,7 +363,41 @@ export function createRenderer(canvas) {
     return best;
   }
 
+  // Ring around a planet, tilted in 3D. Draws only the half that is
+  // behind (front = false) or in front of (front = true) the planet.
+  const RING_TILT = 0.45; // radians
+  function drawRingHalf(cam, cx, cy, cz, R, planetDepth, front, color, lineW) {
+    const ct = Math.cos(RING_TILT), st = Math.sin(RING_TILT);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineW;
+    ctx.beginPath();
+    const steps = 96;
+    let started = false;
+    for (let k = 0; k <= steps; k++) {
+      const a = (k / steps) * Math.PI * 2;
+      const lx = R * Math.cos(a);
+      const ly = R * Math.sin(a) * ct;
+      const lz = R * Math.sin(a) * st;
+      const q = project(cam, [cx + lx, cy + ly, cz + lz], width, height);
+      if (!q || (q.depth < planetDepth) !== front) { started = false; continue; }
+      if (!started) { ctx.moveTo(q.x, q.y); started = true; }
+      else ctx.lineTo(q.x, q.y);
+    }
+    ctx.stroke();
+  }
+
   function drawPlanet(cam, w, i, p, r, f) {
+    const m = w.mass[i];
+    const isGiant = m > GIANT_MASS;
+    const hasRings = m > RINGED_MASS;
+    const visR = isGiant ? GIANT_VIS_RADIUS : PLANET_VIS_RADIUS;
+
+    // Base colour by type
+    let base;
+    if (isGiant) base = [225, 185, 130];       // tan gas giant
+    else if (m > ROCKY_MASS) base = [90, 170, 255]; // Earth-like
+    else base = [175, 150, 125];               // small rocky: brownish grey
+
     // Light direction in camera space (defaults to "from the viewer")
     let lx = 0, ly = 0, lz = -1;
     const s = findLight(w, i);
@@ -371,21 +410,52 @@ export function createRenderer(canvas) {
     }
     // lz = -1: star on the camera's side (fully lit). lz = +1: star behind (dark)
     const k = 0.25 + 0.75 * (0.5 - 0.5 * lz);
-    const shade = (rgb, mul) => `rgb(${rgb.map(v => Math.round(v * mul)).join(',')})`;
-    const base = [90, 170, 255];
+    const shade = (rgb, mul) => `rgb(${rgb.map(v => Math.round(Math.min(255, v * mul))).join(',')})`;
 
+    ctx.globalAlpha = f;
+
+    // Ring: back half first (behind the planet)
+    const ringIn = visR * 1.5, ringOut = visR * 2.3;
+    const ringMid = (ringIn + ringOut) / 2;
+    const ringPx = (ringOut - ringIn) * p.scale;
+    const ringColor = `rgba(220, 200, 160, ${0.55 * k + 0.15})`;
+    if (hasRings) {
+      drawRingHalf(cam, w.px[i], w.py[i], w.pz[i], ringMid, p.depth, false, ringColor, Math.max(1.5, ringPx));
+    }
+
+    // Sphere with light gradient
     const hx = p.x + lx * r * 0.55;
     const hy = p.y - ly * r * 0.55; // screen y is flipped
     const g = ctx.createRadialGradient(hx, hy, r * 0.05, p.x, p.y, r * 1.05);
-    g.addColorStop(0,    shade([235, 248, 255], k));
+    g.addColorStop(0,    shade([base[0] + 40, base[1] + 40, base[2] + 40], k));
     g.addColorStop(0.45, shade(base, k));
     g.addColorStop(1,    shade([10, 18, 40], 1));
-
-    ctx.globalAlpha = f;
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
     ctx.fill();
+
+    // Bands: stripes clipped to the sphere (only worth drawing if big enough)
+    if (isGiant && r > 5) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.clip();
+      const bands = 7;
+      for (let b = 0; b < bands; b++) {
+        const y0 = p.y - r + ((b + 0.25) / bands) * 2 * r;
+        const hgt = (2 * r) / bands * 0.5;
+        ctx.fillStyle = b % 2 === 0 ? 'rgba(120, 70, 30, 0.28)' : 'rgba(255, 235, 200, 0.12)';
+        ctx.fillRect(p.x - r, y0, 2 * r, hgt);
+      }
+      ctx.restore();
+    }
+
+    // Ring: front half (in front of the planet)
+    if (hasRings) {
+      drawRingHalf(cam, w.px[i], w.py[i], w.pz[i], ringMid, p.depth, true, ringColor, Math.max(1.5, ringPx));
+    }
+
     ctx.globalAlpha = 1;
   }
 
@@ -412,7 +482,8 @@ export function createRenderer(canvas) {
       const { i, x, y, z, p } = it;
       const isStar = w.mass[i] > 0.05;
       if (SHOW_DROP_LINES) drawDropLine(cam, x, y, z, p);
-      const visRadius = isStar ? STAR_VIS_RADIUS : PLANET_VIS_RADIUS;
+      const visRadius = isStar ? STAR_VIS_RADIUS
+        : (w.mass[i] > GIANT_MASS ? GIANT_VIS_RADIUS : PLANET_VIS_RADIUS);
       const r = Math.max(2, visRadius * p.scale);
       const f = fog(cam, p);
       if (isStar) drawStar(p, w.mass[i], r, f);
