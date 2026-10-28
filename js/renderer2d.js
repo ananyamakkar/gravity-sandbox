@@ -94,6 +94,15 @@ export function createRenderer(canvas) {
     }
   }
 
+  // ---- Stars: mass-based colour + additive glow ----
+  // 0.1 Msun = red, 1 = yellow-white, 10 = blue-white
+  function starColor(m) {
+    const t = Math.min(1, Math.max(0, (Math.log10(m) + 1) / 2));
+    const lerp = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+    const red = [255, 120, 80], yellow = [255, 240, 210], blue = [160, 195, 255];
+    return t < 0.5 ? lerp(red, yellow, t / 0.5) : lerp(yellow, blue, (t - 0.5) / 0.5);
+  }
+
   // ---- Trails: ring buffers, recorded by SIMULATED time ----
   const TRAIL_LEN = 200;
   const TRAIL_DT = 0.002;
@@ -127,6 +136,15 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Trail colour by body type: stars match their glow, planets go by mass
+  function trailColor(w, i) {
+    const m = w.mass[i];
+    if (m > 0.05) return starColor(m);        // star
+    if (m > 5e-5) return [255, 190, 120];     // gas giant: tan/orange
+    if (m > 1e-6) return [110, 200, 255];     // Earth-sized: blue
+    return [190, 190, 200];                   // small rocks: grey
+  }
+
   function drawTrails(cam, w) {
     ctx.lineCap = 'round';
     for (let i = 0; i < w.n; i++) {
@@ -134,6 +152,7 @@ export function createRenderer(canvas) {
       if (!t || t.count < 2) continue;
       const start = (t.head - t.count + TRAIL_LEN) % TRAIL_LEN;
       let prev = null;
+      const [tr, tg, tb] = trailColor(w, i);
       for (let k = 0; k <= t.count; k++) {
         let wx, wy, wz;
         if (k < t.count) {
@@ -145,7 +164,7 @@ export function createRenderer(canvas) {
         const p = project(cam, [wx, wy, wz], width, height);
         if (p && prev) {
           const f = k / t.count;
-          ctx.strokeStyle = `rgba(110, 200, 255, ${Math.pow(f, 2) * 0.9 * fog(cam, p)})`;
+          ctx.strokeStyle = `rgba(${tr}, ${tg}, ${tb}, ${Math.pow(f, 2) * 0.9 * fog(cam, p)})`;
           ctx.lineWidth = 0.5 + f * 2.5;
           ctx.beginPath();
           ctx.moveTo(prev.x, prev.y);
@@ -294,15 +313,6 @@ export function createRenderer(canvas) {
       }
     }
     ctx.globalCompositeOperation = 'source-over';
-  }
-
-  // ---- Stars: mass-based colour + additive glow ----
-  // 0.1 Msun = red, 1 = yellow-white, 10 = blue-white
-  function starColor(m) {
-    const t = Math.min(1, Math.max(0, (Math.log10(m) + 1) / 2));
-    const lerp = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
-    const red = [255, 120, 80], yellow = [255, 240, 210], blue = [160, 195, 255];
-    return t < 0.5 ? lerp(red, yellow, t / 0.5) : lerp(yellow, blue, (t - 0.5) / 0.5);
   }
 
   function drawStar(p, mass, r, f) {
