@@ -13,7 +13,7 @@ canvas {
   touch-action: none;
 }
 
-#toolbar, #info {
+#toolbar, #info, #cons {
   position: fixed;
   padding: 10px 14px;
   background: rgba(15, 18, 30, 0.8);
@@ -41,13 +41,21 @@ canvas {
 
 #info[hidden] { display: none; }
 
-#info h3 {
+#cons {
+  bottom: 12px;
+  left: 12px;
+  width: 270px;
+  line-height: 1.5;
+  font-size: 12px;
+}
+
+#info h3, #cons h3 {
   margin: 0 0 6px;
   font-size: 14px;
   color: #fff;
 }
 
-#info .sec {
+#info .sec, #cons .sec {
   margin-top: 8px;
   font-size: 11px;
   text-transform: uppercase;
@@ -55,14 +63,17 @@ canvas {
   color: #8fa0d0;
 }
 
-#info .row {
+#info .row, #cons .row {
   display: flex;
   justify-content: space-between;
   gap: 10px;
 }
 
-#info .row span:first-child { color: #9fb0e0; }
-#info .row span:last-child  { color: #fff; font-variant-numeric: tabular-nums; }
+#info .row span:first-child, #cons .row span:first-child { color: #9fb0e0; }
+#info .row span:last-child, #cons .row span:last-child {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
 
 #toolbar label {
   display: flex;

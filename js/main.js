@@ -1,6 +1,6 @@
 import { createCamera, project, unproject } from './camera.js';
 import { createRenderer } from './renderer2d.js';
-import { createWorld, addBody, computeAccelerations, stepVerlet, predictPath } from './physics.js';
+import { createWorld, addBody, computeAccelerations, stepVerlet, predictPath, diagnostics } from './physics.js';
 import { orbitalElements, sampleOrbit, AU_YR_TO_KMS } from './orbits.js';
 
 const canvas = document.getElementById('view');
@@ -27,6 +27,10 @@ renderer.resize();
 
 const W = () => window.innerWidth;
 const H = () => window.innerHeight;
+
+// ---- Conservation baseline ----
+let base = diagnostics(w);
+function resetBaseline() { base = diagnostics(w); }
 
 // ---- Time controls ----
 const DT = 0.0005;
@@ -162,6 +166,38 @@ function updateInfo() {
   infoEl.innerHTML = html;
 }
 
+// ---- Conservation panel ----
+const consEl = document.getElementById('cons');
+
+const vmag = (v) => Math.hypot(v[0], v[1], v[2]);
+const pct = (x) => {
+  const p = x * 100;
+  return (Math.abs(p) < 1e-12 ? '0' : p.toExponential(2)) + ' %';
+};
+
+function updateConservation() {
+  const d = diagnostics(w);
+
+  const dE = base.energy !== 0 ? (d.energy - base.energy) / Math.abs(base.energy) : 0;
+
+  const dPvec = [d.P[0] - base.P[0], d.P[1] - base.P[1], d.P[2] - base.P[2]];
+  const dP = base.pscale > 0 ? vmag(dPvec) / base.pscale : 0;
+
+  const dLvec = [d.L[0] - base.L[0], d.L[1] - base.L[1], d.L[2] - base.L[2]];
+  const L0 = vmag(base.L);
+  const dL = L0 > 0 ? vmag(dLvec) / L0 : 0;
+
+  let html = '<h3>Conservation</h3>';
+  html += row('Total energy', d.energy.toExponential(4) + ' M☉AU²/yr²');
+  html += row('Energy drift', pct(dE));
+  html += row('Momentum |P|', vmag(d.P).toExponential(3));
+  html += row('Momentum drift', pct(dP));
+  html += row('Ang. momentum |L|', vmag(d.L).toExponential(4));
+  html += row('Ang. mom. drift', pct(dL));
+  html += `<div class="sec">Baseline resets when you launch a body</div>`;
+  consEl.innerHTML = html;
+}
+
 // ---- Input ----
 let mode = null;
 let lastX = 0, lastY = 0;
@@ -229,6 +265,7 @@ canvas.addEventListener('pointerup', (e) => {
       const vel = launchVelocity(aim.start, aim.current);
       addBody(w, { pos: aim.start, vel, mass: LAUNCH_MASS });
       computeAccelerations(w);
+      resetBaseline();            // the system changed, so restart the drift measurement
     }
   }
   mode = null;
@@ -272,6 +309,7 @@ function frame(now) {
 
   if (now - lastInfo > 100) {
     updateInfo();
+    updateConservation();
     lastInfo = now;
   }
   requestAnimationFrame(frame);

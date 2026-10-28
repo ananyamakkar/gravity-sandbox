@@ -78,7 +78,6 @@ export function cloneWorld(w) {
 }
 
 // Simulates a ghost body forward and returns its path as an array of [x,y,z].
-// Other bodies move too, so the prediction accounts for them.
 export function predictPath(w, pos, vel, mass, steps = 400, dt = 0.002) {
   const g = cloneWorld(w);
   const idx = addBody(g, { pos, vel, mass });
@@ -90,4 +89,37 @@ export function predictPath(w, pos, vel, mass, steps = 400, dt = 0.002) {
     path.push([g.px[idx], g.py[idx], g.pz[idx]]);
   }
   return path;
+}
+
+// Conserved quantities of the whole system.
+// Potential energy uses the same softened form as the force, so it is consistent.
+export function diagnostics(w) {
+  const { n, px, py, pz, vx, vy, vz, mass } = w;
+  const eps2 = w.softening * w.softening;
+
+  let ke = 0, pe = 0, pscale = 0;
+  const P = [0, 0, 0];
+  const L = [0, 0, 0];
+
+  for (let i = 0; i < n; i++) {
+    const m = mass[i];
+    const v2 = vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i];
+    ke += 0.5 * m * v2;
+    pscale += m * Math.sqrt(v2);
+
+    P[0] += m * vx[i]; P[1] += m * vy[i]; P[2] += m * vz[i];
+
+    // L = sum m (r x v)
+    L[0] += m * (py[i] * vz[i] - pz[i] * vy[i]);
+    L[1] += m * (pz[i] * vx[i] - px[i] * vz[i]);
+    L[2] += m * (px[i] * vy[i] - py[i] * vx[i]);
+
+    for (let j = i + 1; j < n; j++) {
+      const dx = px[j] - px[i];
+      const dy = py[j] - py[i];
+      const dz = pz[j] - pz[i];
+      pe -= G * m * mass[j] / Math.sqrt(dx * dx + dy * dy + dz * dz + eps2);
+    }
+  }
+  return { energy: ke + pe, ke, pe, P, L, pscale };
 }
