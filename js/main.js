@@ -26,8 +26,7 @@ let currentPreset = 'earth';
 function initWorld() {
   const p = loadPreset(w, currentPreset);
   PRESET_DISTANCE = p.distance;
-  cam.target = [0, 0, 0];
-  cam.distance = p.distance;
+  cam.target = [0, 0, 0]; cam.distance = p.distance;
   renderer.clearTrails();
   return p;
 }
@@ -35,7 +34,6 @@ initWorld();
 
 window.addEventListener('resize', renderer.resize);
 renderer.resize();
-
 const W = () => window.innerWidth;
 const H = () => window.innerHeight;
 
@@ -49,7 +47,6 @@ const MAX_SUBSTEPS = 1000; // raised from 200 so close encounters can use tiny s
 let speed = 0.5;           // simulated years per real second
 let paused = false;
 let stepOnce = false;
-
 const playBtn = document.getElementById('btn-play');
 const stepBtn = document.getElementById('btn-step');
 const speedSlider = document.getElementById('speed');
@@ -104,7 +101,6 @@ document.getElementById('preset').addEventListener('change', (e) => {
 // Reverse time and adaptive timestep
 let reversed = false;
 let adaptive = true;
-
 const revBtn = document.getElementById('btn-rev');
 revBtn.addEventListener('click', () => {
   reversed = !reversed;
@@ -124,17 +120,15 @@ window.addEventListener('keydown', (e) => {
 // ---- UI: launch body type + mass ----
 // Masses in solar masses (M☉)
 const BODY_TYPES = {
-  star:     1,        // Sun-like
+  star: 1,          // Sun-like
   reddwarf: 0.2,
-  giant:    9.5e-4,   // Jupiter
-  rocky:    3e-6,     // Earth-ish
-  moon:     3.7e-8,   // our Moon
-  asteroid: 4.7e-10,  // Ceres
-  comet:    1e-16,    // tiny: gravitationally a test particle
+  giant: 9.5e-4,    // Jupiter
+  rocky: 3e-6,      // Earth-ish
+  moon: 3.7e-8,     // our Moon
+  asteroid: 4.7e-10, // Ceres
+  comet: 1e-16,     // tiny: gravitationally a test particle
 };
-
 let launchMass = BODY_TYPES.rocky;
-
 const typeSelect = document.getElementById('body-type');
 const massSlider = document.getElementById('mass');
 const massLabel = document.getElementById('mass-val');
@@ -145,25 +139,21 @@ function fmtMass(m) {
   if (earth >= 0.01) return earth.toFixed(earth < 10 ? 2 : 1) + ' M⊕';
   return m.toExponential(1) + ' M☉';
 }
-
 function setLaunchMass(m) {
   launchMass = m;
   massSlider.value = Math.log10(m);
   massLabel.textContent = fmtMass(m);
 }
-
 typeSelect.addEventListener('change', () => {
   const m = BODY_TYPES[typeSelect.value];
   if (m !== undefined) setLaunchMass(m); // "custom" keeps the current mass
 });
-
 // Slider is log10(mass): -17 -> 1e-17 M☉, 1.5 -> ~31 M☉
 massSlider.addEventListener('input', () => {
   launchMass = Math.pow(10, Number(massSlider.value));
   massLabel.textContent = fmtMass(launchMass);
   typeSelect.value = 'custom';
 });
-
 setLaunchMass(launchMass);
 
 // ---- UI: inclination slider ----
@@ -190,7 +180,6 @@ heightSlider.addEventListener('input', () => {
 const gainSlider = document.getElementById('gain');
 const gainLabel = document.getElementById('gain-val');
 let launchGain = 4;
-
 function setGain(g) {
   launchGain = g;
   gainSlider.value = Math.log10(g);
@@ -205,6 +194,16 @@ trailSlider.addEventListener('input', () => {
   const n = Number(trailSlider.value);
   renderer.setTrailLength(n);
   trailLabel.textContent = n === 0 ? 'off' : n;
+});
+
+// ---- UI: softening (log10 of ε in AU) ----   // NEW
+const softSlider = document.getElementById('soft');
+const softLabel = document.getElementById('soft-val');
+softSlider.addEventListener('input', () => {
+  w.softening = Math.pow(10, Number(softSlider.value));
+  softLabel.textContent = w.softening.toExponential(1) + ' AU';
+  computeAccelerations(w); // keep Verlet's stored accelerations consistent
+  resetBaseline();         // the potential energy formula just changed
 });
 
 // ---- Momentum zeroing ----
@@ -226,7 +225,6 @@ function zeroMomentum() {
   }
   resetBaseline();
 }
-
 let autoZero = true;
 document.getElementById('btn-zero').addEventListener('click', zeroMomentum);
 document.getElementById('autozero').addEventListener('change', (e) => {
@@ -259,7 +257,6 @@ orthoBtn.addEventListener('click', () => {
 let trueScale = false;
 const scaleBtn = document.getElementById('btn-scale');
 const scaleNote = document.getElementById('scale-note');
-
 function applyScale(v) {
   trueScale = v;
   renderer.setTrueScale(v);
@@ -312,23 +309,19 @@ function updateInfo() {
   infoEl.hidden = false;
   const i = selected;
   const el = orbitalElements(w, i);
-
   let html = `<h3>Body #${i}</h3>`;
   html += row('Mass', fmtMass(w.mass[i]));
   html += row('Position (AU)', `${fmt(w.px[i], 2)}, ${fmt(w.py[i], 2)}, ${fmt(w.pz[i], 2)}`);
-
   if (!el) {
     html += '<div class="sec">No other bodies</div>';
     infoEl.innerHTML = html;
     return;
   }
-
   html += `<div class="sec">Around body #${el.dominant}</div>`;
   html += row('Distance', fmt(el.dist, 3) + ' AU');
   html += row('Speed', fmt(el.speed * AU_YR_TO_KMS, 2) + ' km/s');
   html += row('Circular speed', fmt(el.vCirc * AU_YR_TO_KMS, 2) + ' km/s');
   html += row('Escape speed', fmt(el.vEsc * AU_YR_TO_KMS, 2) + ' km/s');
-
   html += `<div class="sec">Orbit</div>`;
   html += row('Type', el.type + (el.bound ? ' (bound)' : ' (escaping)'));
   html += row('Eccentricity', fmt(el.ecc, 4));
@@ -336,14 +329,23 @@ function updateInfo() {
   html += row('Periapsis', fmt(el.peri, 3) + ' AU');
   html += row('Apoapsis', el.apo === null ? '—' : fmt(el.apo, 3) + ' AU');
   html += row('Period', el.period === null ? '—' : fmt(el.period, 3) + ' yr');
-
   html += `<div class="sec">Orientation</div>`;
   html += row('Inclination', fmt(el.incl, 1) + '°' + (el.retrograde ? ' (retrograde)' : ''));
   html += row('Ascending node Ω', el.node === null ? '—' : fmt(el.node, 1) + '°');
   html += row('Arg. periapsis ω', el.argPeri === null ? '—' : fmt(el.argPeri, 1) + '°');
   html += row('True anomaly ν', el.nu === null ? '—' : fmt(el.nu, 1) + '°');
-
   infoEl.innerHTML = html;
+}
+
+// ---- Simulated clock ----   // NEW
+const clockEl = document.getElementById('clock');
+function updateClock() {
+  const t = w.time;
+  const days = t * 365.25;
+  const text = Math.abs(t) >= 1
+    ? `t = ${t.toFixed(3)} yr`
+    : `t = ${days.toFixed(1)} days`;
+  clockEl.textContent = text + (reversed ? '  ⏪' : '');
 }
 
 // ---- Conservation panel ----
@@ -353,7 +355,6 @@ const pct = (x) => {
   const p = x * 100;
   return (Math.abs(p) < 1e-12 ? '0' : p.toExponential(2)) + ' %';
 };
-
 function updateConservation() {
   const d = diagnostics(w);
   const dE = base.energy !== 0 ? (d.energy - base.energy) / Math.abs(base.energy) : 0;
@@ -362,7 +363,6 @@ function updateConservation() {
   const dLvec = [d.L[0] - base.L[0], d.L[1] - base.L[1], d.L[2] - base.L[2]];
   const L0 = vmag(base.L);
   const dL = L0 > 0 ? vmag(dLvec) / L0 : 0;
-
   let html = '<h3>Conservation</h3>';
   html += row('Total energy', d.energy.toExponential(4) + ' M☉AU²/yr²');
   html += row('Energy drift', pct(dE));
@@ -387,7 +387,6 @@ canvas.addEventListener('pointerdown', (e) => {
   lastX = downX = e.clientX;
   lastY = downY = e.clientY;
   canvas.setPointerCapture(e.pointerId);
-
   if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
     e.preventDefault();
     setFollow(-1);
@@ -461,8 +460,7 @@ canvas.addEventListener('wheel', (e) => {
 let last = performance.now();
 let acc = 0;
 let lastInfo = 0;
-
-const flashes = [];         // visual events from merges, consumed by the renderer
+const flashes = []; // visual events from merges, consumed by the renderer
 const COLLISION_SCALE = 30; // physical radii are tiny; this makes merges happen at visible distances
 
 // A merge renumbers bodies: j is removed, and the last body moves into slot j.
@@ -520,12 +518,14 @@ function frame(now) {
     if (followIdx < w.n) cam.target = [w.px[followIdx], w.py[followIdx], w.pz[followIdx]];
     else setFollow(-1);
   }
+
   renderer.render(cam, w, aim, selected, orbit, flashes, followIdx);
   flashes.length = 0;
 
   if (now - lastInfo > 100) {
     updateInfo();
     updateConservation();
+    updateClock();   // NEW
     lastInfo = now;
   }
   requestAnimationFrame(frame);

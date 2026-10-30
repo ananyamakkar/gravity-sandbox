@@ -8,6 +8,7 @@
 </head>
 <body>
   <canvas id="view"></canvas>
+  <div id="clock"></div>
 
   <div id="toolbar">
     <div class="btn-row">
@@ -93,6 +94,11 @@
       Trail length: <span id="trail-val">200</span>
       <input id="trail" type="range" min="0" max="600" step="10" value="200">
     </label>
+
+    <label>
+  Softening: <span id="soft-val">1.0e-4 AU</span>
+  <input id="soft" type="range" min="-6" max="-1" step="0.1" value="-4">
+</label>
 
     <div class="btn-row">
       <button id="btn-zero">Zero momentum</button>
