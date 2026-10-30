@@ -85,21 +85,50 @@ export function createRenderer(canvas) {
     ctx.stroke();
   }
 
+  // ---- Adaptive grid: ring spacing follows the zoom ----
+  // Rounds up to the next "nice" number: 1, 2, 5, 10 (times a power of ten)
+  function niceStep(x) {
+    const p = Math.pow(10, Math.floor(Math.log10(x)));
+    const m = x / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+  }
+
+  function fmtAU(v) {
+    if (v >= 1) return String(+v.toPrecision(3));
+    if (v >= 0.01) return String(+v.toPrecision(2));
+    return v.toExponential(0);
+  }
+
   function drawGrid(cam) {
-    for (let r = 1; r <= 5; r++) {
-      drawRing(cam, r, 'rgba(120, 150, 255, 0.18)');
+    // Cover everything from the origin out to the far edge of the view
+    const extent = Math.hypot(cam.target[0], cam.target[1]) + cam.distance;
+    const step = niceStep(extent / 8);
+    const rings = Math.min(12, Math.max(1, Math.ceil(extent / step)));
+    const outer = rings * step;
+
+    for (let r = 1; r <= rings; r++) {
+      drawRing(cam, r * step, 'rgba(120, 150, 255, 0.18)');
     }
+
     ctx.strokeStyle = 'rgba(120, 150, 255, 0.10)';
     ctx.lineWidth = 1;
+    const p1 = project(cam, [0, 0, 0], width, height);
     for (let k = 0; k < 12; k++) {
       const a = (k / 12) * Math.PI * 2;
-      const p1 = project(cam, [0, 0, 0], width, height);
-      const p2 = project(cam, [5 * Math.cos(a), 5 * Math.sin(a), 0], width, height);
+      const p2 = project(cam, [outer * Math.cos(a), outer * Math.sin(a), 0], width, height);
       if (!p1 || !p2) continue;
       ctx.beginPath();
       ctx.moveTo(p1.x, p1.y);
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
+    }
+
+    // Distance labels along the +x axis
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(150, 170, 255, 0.55)';
+    for (let r = 1; r <= rings; r++) {
+      const q = project(cam, [r * step, 0, 0], width, height);
+      if (q) ctx.fillText(fmtAU(r * step) + ' AU', q.x + 4, q.y - 3);
     }
   }
 
@@ -113,10 +142,13 @@ export function createRenderer(canvas) {
   }
 
   // ---- Trails: ring buffers, recorded by SIMULATED time ----
-  const TRAIL_LEN = 200;
-  const TRAIL_DT = 0.002;
+  const TRAIL_CAP = 600;   // samples stored per body (the slider picks how many are drawn)
+  const TRAIL_DT = 0.002;  // simulated years between samples
+  let trailLength = 200;   // samples drawn; 0 = trails off
   const trails = [];
   let lastRecord = -Infinity;
+
+  function setTrailLength(n) { trailLength = n; }
 
   function clearTrails() {
     trails.length = 0;
@@ -135,9 +167,9 @@ export function createRenderer(canvas) {
     for (let i = 0; i < w.n; i++) {
       if (!trails[i]) {
         trails[i] = {
-          x: new Float32Array(TRAIL_LEN),
-          y: new Float32Array(TRAIL_LEN),
-          z: new Float32Array(TRAIL_LEN),
+          x: new Float32Array(TRAIL_CAP),
+          y: new Float32Array(TRAIL_CAP),
+          z: new Float32Array(TRAIL_CAP),
           head: 0,
           count: 0,
         };
@@ -146,8 +178,8 @@ export function createRenderer(canvas) {
       t.x[t.head] = w.px[i];
       t.y[t.head] = w.py[i];
       t.z[t.head] = w.pz[i];
-      t.head = (t.head + 1) % TRAIL_LEN;
-      if (t.count < TRAIL_LEN) t.count++;
+      t.head = (t.head + 1) % TRAIL_CAP;
+      if (t.count < TRAIL_CAP) t.count++;
     }
   }
 
@@ -160,26 +192,51 @@ export function createRenderer(canvas) {
     return [190, 190, 200];                     // small rocks: grey
   }
 
+  // Strokes the path built so far in one draw call, then starts a fresh path.
+  // f = how far along the trail we are (0 = oldest, 1 = newest): controls fade and thickness.
+  function strokeChunk(cam, p, f, c) {
+    ctx.strokeStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${Math.pow(f, 2) * 0.9 * fog(cam, p)})`;
+    ctx.lineWidth = 0.5 + f * 2.5;
+    ctx.stroke();
+    ctx.beginPath();
+  }
+
+  // Trails are drawn in chunks of several segments (one stroke per chunk, at most ~40
+  // strokes per body) instead of one stroke per segment, which keeps long trails cheap.
   function drawTrails(cam, w, follow = -1) {
+    if (trailLength < 2) return;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     // While following, shift each old sample by how far the followed body has moved since then
     const ft = (follow >= 0 && follow < w.n) ? trails[follow] : null;
+
     for (let i = 0; i < w.n; i++) {
       if (i === follow) continue;
       const t = trails[i];
-      if (!t || t.count < 2) continue;
-      const start = (t.head - t.count + TRAIL_LEN) % TRAIL_LEN;
+      if (!t) continue;
+      const n = Math.min(t.count, trailLength);
+      if (n < 2) continue;
+
+      const start = (t.head - n + TRAIL_CAP) % TRAIL_CAP;
+      const chunk = Math.max(1, Math.ceil(n / 40));
+      const col = trailColor(w, i);
       let prev = null;
-      const [tr, tg, tb] = trailColor(w, i);
-      for (let k = 0; k <= t.count; k++) {
+      let pending = 0; // segments in the path waiting to be stroked
+
+      ctx.beginPath();
+      for (let k = 0; k <= n; k++) {
         let wx, wy, wz;
-        if (k < t.count) {
-          const idx = (start + k) % TRAIL_LEN;
+        if (k < n) {
+          const idx = (start + k) % TRAIL_CAP;
           wx = t.x[idx]; wy = t.y[idx]; wz = t.z[idx];
           if (ft) {
-            const d = t.count - 1 - k; // samples back from the newest
-            if (d >= ft.count) { prev = null; continue; }
-            const fi = (ft.head - 1 - d + TRAIL_LEN) % TRAIL_LEN;
+            const d = n - 1 - k; // samples back from the newest
+            if (d >= ft.count) {
+              if (pending) { strokeChunk(cam, prev, k / n, col); pending = 0; }
+              prev = null;
+              continue;
+            }
+            const fi = (ft.head - 1 - d + TRAIL_CAP) % TRAIL_CAP;
             wx += w.px[follow] - ft.x[fi];
             wy += w.py[follow] - ft.y[fi];
             wz += w.pz[follow] - ft.z[fi];
@@ -187,18 +244,19 @@ export function createRenderer(canvas) {
         } else {
           wx = w.px[i]; wy = w.py[i]; wz = w.pz[i];
         }
+
         const p = project(cam, [wx, wy, wz], width, height);
         if (p && prev) {
-          const f = k / t.count;
-          ctx.strokeStyle = `rgba(${tr}, ${tg}, ${tb}, ${Math.pow(f, 2) * 0.9 * fog(cam, p)})`;
-          ctx.lineWidth = 0.5 + f * 2.5;
-          ctx.beginPath();
-          ctx.moveTo(prev.x, prev.y);
+          if (pending === 0) ctx.moveTo(prev.x, prev.y);
           ctx.lineTo(p.x, p.y);
-          ctx.stroke();
+          if (++pending >= chunk) { strokeChunk(cam, p, k / n, col); pending = 0; }
+        } else if (pending) {
+          strokeChunk(cam, prev, k / n, col);
+          pending = 0;
         }
         prev = p;
       }
+      if (pending) strokeChunk(cam, prev, 1, col);
     }
   }
 
@@ -552,5 +610,5 @@ export function createRenderer(canvas) {
     drawFlashes(cam);
   }
 
-  return { resize, render, recordTrails, clearTrails, removeTrail, setTrueScale };
+  return { resize, render, recordTrails, clearTrails, removeTrail, setTrueScale, setTrailLength };
 }

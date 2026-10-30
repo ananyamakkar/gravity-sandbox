@@ -198,6 +198,15 @@ function setGain(g) {
 }
 gainSlider.addEventListener('input', () => setGain(Math.pow(10, Number(gainSlider.value))));
 
+// ---- UI: trail length (0 = off) ----
+const trailSlider = document.getElementById('trail');
+const trailLabel = document.getElementById('trail-val');
+trailSlider.addEventListener('input', () => {
+  const n = Number(trailSlider.value);
+  renderer.setTrailLength(n);
+  trailLabel.textContent = n === 0 ? 'off' : n;
+});
+
 // ---- Momentum zeroing ----
 // Subtracts the centre-of-mass velocity from every body, so the system's
 // total momentum is zero and it stops drifting across the screen.
