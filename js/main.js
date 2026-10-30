@@ -76,6 +76,7 @@ function applyPresetDefaults(p) {
   applyScale(p.trueScale === true);
   setSpeed(p.speed !== undefined ? p.speed : 0.5);
   setGain(p.gain !== undefined ? p.gain : 4);
+  document.getElementById('chaos-note').hidden = !p.chaotic; // NEW (B)
 }
 
 // Integrator choice, restart, and scenario choice
@@ -196,7 +197,7 @@ trailSlider.addEventListener('input', () => {
   trailLabel.textContent = n === 0 ? 'off' : n;
 });
 
-// ---- UI: softening (log10 of ε in AU) ----   // NEW
+// ---- UI: softening (log10 of ε in AU) ----
 const softSlider = document.getElementById('soft');
 const softLabel = document.getElementById('soft-val');
 softSlider.addEventListener('input', () => {
@@ -251,6 +252,11 @@ const orthoBtn = document.getElementById('btn-ortho');
 orthoBtn.addEventListener('click', () => {
   cam.ortho = !cam.ortho;
   orthoBtn.textContent = cam.ortho ? 'Orthographic' : 'Perspective';
+});
+
+// ---- UI: overlay toggles ---- // NEW (B)
+document.getElementById('ov-com').addEventListener('change', (e) => {
+  renderer.setShowCOM(e.target.checked);
 });
 
 // ---- UI: visual vs true scale ----
@@ -337,7 +343,7 @@ function updateInfo() {
   infoEl.innerHTML = html;
 }
 
-// ---- Simulated clock ----   // NEW
+// ---- Simulated clock ----
 const clockEl = document.getElementById('clock');
 function updateClock() {
   const t = w.time;
@@ -525,7 +531,7 @@ function frame(now) {
   if (now - lastInfo > 100) {
     updateInfo();
     updateConservation();
-    updateClock();   // NEW
+    updateClock();
     lastInfo = now;
   }
   requestAnimationFrame(frame);

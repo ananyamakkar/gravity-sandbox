@@ -4,7 +4,6 @@ import { mulMat, mulMatVec } from './vec3.js';
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   let width = 0, height = 0;
-
   const SHOW_DROP_LINES = true;
 
   // Visual radii in AU (exaggerated so they're visible)
@@ -142,9 +141,9 @@ export function createRenderer(canvas) {
   }
 
   // ---- Trails: ring buffers, recorded by SIMULATED time ----
-  const TRAIL_CAP = 600;   // samples stored per body (the slider picks how many are drawn)
-  const TRAIL_DT = 0.002;  // simulated years between samples
-  let trailLength = 200;   // samples drawn; 0 = trails off
+  const TRAIL_CAP = 600;  // samples stored per body (the slider picks how many are drawn)
+  const TRAIL_DT = 0.002; // simulated years between samples
+  let trailLength = 200;  // samples drawn; 0 = trails off
   const trails = [];
   let lastRecord = -Infinity;
 
@@ -186,10 +185,10 @@ export function createRenderer(canvas) {
   // Trail colour by body type: stars match their glow, planets go by mass
   function trailColor(w, i) {
     const m = w.mass[i];
-    if (m > 0.05) return starColor(m);          // star
-    if (m > GIANT_MASS) return [255, 190, 120]; // gas giant: tan/orange
-    if (m > ROCKY_MASS) return [110, 200, 255]; // Earth-sized: blue
-    return [190, 190, 200];                     // small rocks: grey
+    if (m > 0.05) return starColor(m);            // star
+    if (m > GIANT_MASS) return [255, 190, 120];   // gas giant: tan/orange
+    if (m > ROCKY_MASS) return [110, 200, 255];   // Earth-sized: blue
+    return [190, 190, 200];                       // small rocks: grey
   }
 
   // Strokes the path built so far in one draw call, then starts a fresh path.
@@ -209,20 +208,17 @@ export function createRenderer(canvas) {
     ctx.lineJoin = 'round';
     // While following, shift each old sample by how far the followed body has moved since then
     const ft = (follow >= 0 && follow < w.n) ? trails[follow] : null;
-
     for (let i = 0; i < w.n; i++) {
       if (i === follow) continue;
       const t = trails[i];
       if (!t) continue;
       const n = Math.min(t.count, trailLength);
       if (n < 2) continue;
-
       const start = (t.head - n + TRAIL_CAP) % TRAIL_CAP;
       const chunk = Math.max(1, Math.ceil(n / 40));
       const col = trailColor(w, i);
       let prev = null;
       let pending = 0; // segments in the path waiting to be stroked
-
       ctx.beginPath();
       for (let k = 0; k <= n; k++) {
         let wx, wy, wz;
@@ -244,7 +240,6 @@ export function createRenderer(canvas) {
         } else {
           wx = w.px[i]; wy = w.py[i]; wz = w.pz[i];
         }
-
         const p = project(cam, [wx, wy, wz], width, height);
         if (p && prev) {
           if (pending === 0) ctx.moveTo(prev.x, prev.y);
@@ -413,7 +408,6 @@ export function createRenderer(canvas) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, R, 0, Math.PI * 2);
       ctx.fill();
-
       ctx.fillStyle = `rgba(255, 220, 160, ${alpha})`;
       for (const q of f.parts) {
         const d = base * 1.5 * q.s * t;
@@ -498,9 +492,9 @@ export function createRenderer(canvas) {
 
     // Base colour by type
     let base;
-    if (isGiant) base = [225, 185, 130];            // tan gas giant
+    if (isGiant) base = [225, 185, 130];          // tan gas giant
     else if (m > ROCKY_MASS) base = [90, 170, 255]; // Earth-like
-    else base = [175, 150, 125];                    // small rocky: brownish grey
+    else base = [175, 150, 125];                  // small rocky: brownish grey
 
     // Light direction in camera space (defaults to "from the viewer")
     let lx = 0, ly = 0, lz = -1;
@@ -559,8 +553,35 @@ export function createRenderer(canvas) {
     if (hasRings) {
       drawRingHalf(cam, w.px[i], w.py[i], w.pz[i], ringMid, p.depth, true, ringColor, Math.max(1.5, ringPx));
     }
-
     ctx.globalAlpha = 1;
+  }
+
+  // ---- Overlay: center of mass ---- // NEW (B)
+  let showCOM = false;
+  function setShowCOM(v) { showCOM = v; }
+
+  function drawCOM(cam, w) {
+    if (!showCOM || w.n === 0) return;
+    let x = 0, y = 0, z = 0, m = 0;
+    for (let i = 0; i < w.n; i++) {
+      x += w.mass[i] * w.px[i];
+      y += w.mass[i] * w.py[i];
+      z += w.mass[i] * w.pz[i];
+      m += w.mass[i];
+    }
+    const p = project(cam, [x / m, y / m, z / m], width, height);
+    if (!p) return;
+    const s = 7;
+    ctx.strokeStyle = 'rgba(255, 120, 120, 0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
+    ctx.moveTo(p.x - s - 3, p.y); ctx.lineTo(p.x + s + 3, p.y);
+    ctx.moveTo(p.x, p.y - s - 3); ctx.lineTo(p.x, p.y + s + 3);
+    ctx.stroke();
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255, 120, 120, 0.9)';
+    ctx.fillText('CoM', p.x + 10, p.y - 8);
   }
 
   function render(cam, w, aim, selected = -1, orbit = null, flashes = [], follow = -1) {
@@ -572,6 +593,7 @@ export function createRenderer(canvas) {
     drawOrbit(cam, orbit);
     drawTrails(cam, w, follow);
     drawAim(cam, aim);
+    drawCOM(cam, w); // NEW (B)
 
     // Project everything, then sort far -> near (painter's algorithm)
     const items = [];
@@ -606,9 +628,9 @@ export function createRenderer(canvas) {
         ctx.stroke();
       }
     }
-
     drawFlashes(cam);
   }
 
-  return { resize, render, recordTrails, clearTrails, removeTrail, setTrueScale, setTrailLength };
+  return { resize, render, recordTrails, clearTrails, removeTrail,
+           setTrueScale, setTrailLength, setShowCOM }; // NEW (B): setShowCOM
 }

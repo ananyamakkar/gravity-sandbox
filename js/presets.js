@@ -226,6 +226,7 @@ export const PRESETS = {
   // Tiny changes in the numbers give completely different outcomes.
   chaos: {
     name: 'Chaotic three-body',
+    chaotic: true,
     distance: 10,
     speed: 0.3,
     build(w) {

@@ -142,3 +142,10 @@ canvas {
   font: 13px system-ui, sans-serif;
   pointer-events: none;
 }
+
+.sec-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8fa0d0;
+}

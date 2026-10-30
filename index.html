@@ -107,6 +107,11 @@
       <input id="autozero" type="checkbox" checked> Auto-zero on launch
     </label>
 
+    <div class="sec-title">Overlays</div>
+<label class="check">
+  <input id="ov-com" type="checkbox"> Center of mass
+</label>
+
     <div class="btn-row">
       <button id="btn-top">Top-down</button>
       <button id="btn-side">Side view</button>
@@ -117,6 +122,10 @@
     </div>
 
     <div class="hint" id="scale-note">Sizes exaggerated · merges at 30× radius</div>
+    <div class="hint" id="chaos-note" hidden>
+  ⚠ Chaotic system: tiny numerical differences grow exponentially, so this run
+  will diverge from a "true" one over long times. That's physics, not a bug.
+</div>
 
     <div class="hint">
       Left-drag: launch · Click body: select<br>
