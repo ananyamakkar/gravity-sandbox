@@ -185,12 +185,33 @@ export function createRenderer(canvas) {
     }
   }
 
-  // Aiming: launch dot, dashed drag line, and the predicted path
+  // Aiming: launch dot, dashed drag line, drop line to the z=0 plane, and the predicted path
   function drawAim(cam, aim) {
     if (!aim) return;
     const a = project(cam, aim.start, width, height);
     const b = project(cam, aim.current, width, height);
     if (!a || !b) return;
+
+    // Drop line: shows how far above or below the plane the launch point is
+    if (Math.abs(aim.start[2]) > 1e-4) {
+      const g = project(cam, [aim.start[0], aim.start[1], 0], width, height);
+      if (g) {
+        const above = aim.start[2] > 0;
+        const col = above ? '120, 220, 255' : '255, 130, 200';
+        ctx.strokeStyle = `rgba(${col}, 0.7)`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(g.x, g.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = `rgba(${col}, 0.8)`;
+        ctx.beginPath();
+        ctx.ellipse(g.x, g.y, 3.5, 3.5 * Math.cos(cam.pitch) + 1, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.lineWidth = 1.5;
@@ -402,9 +423,9 @@ export function createRenderer(canvas) {
 
     // Base colour by type
     let base;
-    if (isGiant) base = [225, 185, 130];          // tan gas giant
+    if (isGiant) base = [225, 185, 130];            // tan gas giant
     else if (m > ROCKY_MASS) base = [90, 170, 255]; // Earth-like
-    else base = [175, 150, 125];                  // small rocky: brownish grey
+    else base = [175, 150, 125];                    // small rocky: brownish grey
 
     // Light direction in camera space (defaults to "from the viewer")
     let lx = 0, ly = 0, lz = -1;

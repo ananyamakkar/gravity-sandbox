@@ -161,6 +161,42 @@ inclSlider.addEventListener('input', () => {
   inclLabel.textContent = inclination + '°';
 });
 
+// ---- UI: launch height slider ----
+// The click is projected onto the horizontal plane z = launchHeight.
+const heightSlider = document.getElementById('height');
+const heightLabel = document.getElementById('height-val');
+let launchHeight = 0;
+heightSlider.addEventListener('input', () => {
+  launchHeight = Number(heightSlider.value);
+  heightLabel.textContent = launchHeight.toFixed(2) + ' AU';
+});
+
+// ---- Momentum zeroing ----
+// Subtracts the centre-of-mass velocity from every body, so the system's
+// total momentum is zero and it stops drifting across the screen.
+function zeroMomentum() {
+  let mx = 0, my = 0, mz = 0, m = 0;
+  for (let i = 0; i < w.n; i++) {
+    mx += w.mass[i] * w.vx[i];
+    my += w.mass[i] * w.vy[i];
+    mz += w.mass[i] * w.vz[i];
+    m += w.mass[i];
+  }
+  if (m === 0) return;
+  for (let i = 0; i < w.n; i++) {
+    w.vx[i] -= mx / m;
+    w.vy[i] -= my / m;
+    w.vz[i] -= mz / m;
+  }
+  resetBaseline();
+}
+
+let autoZero = true;
+document.getElementById('btn-zero').addEventListener('click', zeroMomentum);
+document.getElementById('autozero').addEventListener('change', (e) => {
+  autoZero = e.target.checked;
+});
+
 // ---- UI: camera buttons ----
 document.getElementById('btn-top').addEventListener('click', () => { cam.pitch = Math.PI / 2; });
 document.getElementById('btn-side').addEventListener('click', () => { cam.pitch = 0.05; });
@@ -305,7 +341,7 @@ canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     mode = 'pan';
   } else if (e.button === 0) {
-    const p = unproject(cam, e.clientX, e.clientY, W(), H(), 0);
+    const p = unproject(cam, e.clientX, e.clientY, W(), H(), launchHeight);
     if (p) {
       mode = 'launch';
       aim = { start: p, current: p, path: null };
@@ -334,7 +370,7 @@ canvas.addEventListener('pointermove', (e) => {
   } else if (mode === 'launch') {
     const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
     if (moved >= CLICK_THRESHOLD) {
-      const p = unproject(cam, e.clientX, e.clientY, W(), H(), 0);
+      const p = unproject(cam, e.clientX, e.clientY, W(), H(), launchHeight);
       if (p) {
         aim.current = p;
         aim.path = predictPath(w, aim.start, launchVelocity(aim.start, p), launchMass);
@@ -354,6 +390,7 @@ canvas.addEventListener('pointerup', (e) => {
       const vel = launchVelocity(aim.start, aim.current);
       addBody(w, { pos: aim.start, vel, mass: launchMass, radius: radiusFromMass(launchMass) });
       computeAccelerations(w);
+      if (autoZero) zeroMomentum();
       resetBaseline();
     }
   }
