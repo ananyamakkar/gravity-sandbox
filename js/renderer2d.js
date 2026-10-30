@@ -123,6 +123,12 @@ export function createRenderer(canvas) {
     lastRecord = -Infinity;
   }
 
+  // Mirrors physics' "move the last body into the freed slot" for trails
+  function removeTrail(removed, moved) {
+    trails[removed] = trails[moved];
+    trails.length = moved;
+  }
+
   function recordTrails(w) {
     if (Math.abs(w.time - lastRecord) < TRAIL_DT) return;
     lastRecord = w.time;
@@ -154,9 +160,12 @@ export function createRenderer(canvas) {
     return [190, 190, 200];                     // small rocks: grey
   }
 
-  function drawTrails(cam, w) {
+  function drawTrails(cam, w, follow = -1) {
     ctx.lineCap = 'round';
+    // While following, shift each old sample by how far the followed body has moved since then
+    const ft = (follow >= 0 && follow < w.n) ? trails[follow] : null;
     for (let i = 0; i < w.n; i++) {
+      if (i === follow) continue;
       const t = trails[i];
       if (!t || t.count < 2) continue;
       const start = (t.head - t.count + TRAIL_LEN) % TRAIL_LEN;
@@ -167,6 +176,14 @@ export function createRenderer(canvas) {
         if (k < t.count) {
           const idx = (start + k) % TRAIL_LEN;
           wx = t.x[idx]; wy = t.y[idx]; wz = t.z[idx];
+          if (ft) {
+            const d = t.count - 1 - k; // samples back from the newest
+            if (d >= ft.count) { prev = null; continue; }
+            const fi = (ft.head - 1 - d + TRAIL_LEN) % TRAIL_LEN;
+            wx += w.px[follow] - ft.x[fi];
+            wy += w.py[follow] - ft.y[fi];
+            wz += w.pz[follow] - ft.z[fi];
+          }
         } else {
           wx = w.px[i]; wy = w.py[i]; wz = w.pz[i];
         }
@@ -488,14 +505,14 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = 1;
   }
 
-  function render(cam, w, aim, selected = -1, orbit = null, flashes = []) {
+  function render(cam, w, aim, selected = -1, orbit = null, flashes = [], follow = -1) {
     addFlashes(flashes);
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
     drawStarfield(cam);
     drawGrid(cam);
     drawOrbit(cam, orbit);
-    drawTrails(cam, w);
+    drawTrails(cam, w, follow);
     drawAim(cam, aim);
 
     // Project everything, then sort far -> near (painter's algorithm)
@@ -535,5 +552,5 @@ export function createRenderer(canvas) {
     drawFlashes(cam);
   }
 
-  return { resize, render, recordTrails, clearTrails, setTrueScale };
+  return { resize, render, recordTrails, clearTrails, removeTrail, setTrueScale };
 }

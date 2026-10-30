@@ -68,6 +68,7 @@ speedSlider.addEventListener('input', () => {
 
 // Selection (declared early because Restart and the scenario dropdown use it)
 let selected = -1;
+let followIdx = -1; // body the camera is locked onto, or -1
 
 // Integrator choice, restart, and scenario choice
 let method = 'verlet';
@@ -78,12 +79,14 @@ document.getElementById('method').addEventListener('change', (e) => {
 document.getElementById('btn-restart').addEventListener('click', () => {
   initWorld();
   selected = -1;
+  setFollow(-1);
   resetBaseline();
 });
 document.getElementById('preset').addEventListener('change', (e) => {
   currentPreset = e.target.value;
   initWorld();
   selected = -1;
+  setFollow(-1);
   resetBaseline();
 });
 
@@ -200,7 +203,18 @@ document.getElementById('autozero').addEventListener('change', (e) => {
 // ---- UI: camera buttons ----
 document.getElementById('btn-top').addEventListener('click', () => { cam.pitch = Math.PI / 2; });
 document.getElementById('btn-side').addEventListener('click', () => { cam.pitch = 0.05; });
-document.getElementById('btn-reset').addEventListener('click', resetCamera);
+document.getElementById('btn-reset').addEventListener('click', () => { setFollow(-1); resetCamera(); });
+
+// ---- UI: follow camera ----
+const followBtn = document.getElementById('btn-follow');
+function setFollow(i) {
+  followIdx = i;
+  followBtn.textContent = i >= 0 ? 'Unfollow' : 'Follow selected';
+}
+followBtn.addEventListener('click', () => {
+  if (followIdx >= 0) setFollow(-1);
+  else if (selected >= 0 && selected < w.n) setFollow(selected);
+});
 
 const orthoBtn = document.getElementById('btn-ortho');
 orthoBtn.addEventListener('click', () => {
@@ -230,7 +244,11 @@ function launchVelocity(start, current) {
   const spd = Math.hypot(dx, dy);
   const i = (inclination * Math.PI) / 180;
   const c = Math.cos(i);
-  return [dx * c, dy * c, spd * Math.sin(i)];
+  const v = [dx * c, dy * c, spd * Math.sin(i)];
+  if (followIdx >= 0 && followIdx < w.n) { // launch velocity is relative to the followed body
+    v[0] += w.vx[followIdx]; v[1] += w.vy[followIdx]; v[2] += w.vz[followIdx];
+  }
+  return v;
 }
 
 // ---- Picking: nearest body to the click, in screen space ----
@@ -339,6 +357,7 @@ canvas.addEventListener('pointerdown', (e) => {
 
   if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
     e.preventDefault();
+    setFollow(-1);
     mode = 'pan';
   } else if (e.button === 0) {
     const p = unproject(cam, e.clientX, e.clientY, W(), H(), launchHeight);
@@ -373,7 +392,7 @@ canvas.addEventListener('pointermove', (e) => {
       const p = unproject(cam, e.clientX, e.clientY, W(), H(), launchHeight);
       if (p) {
         aim.current = p;
-        aim.path = predictPath(w, aim.start, launchVelocity(aim.start, p), launchMass);
+        aim.path = predictPath(w, aim.start, launchVelocity(aim.start, p), launchMass, 400, 0.002, followIdx);
       }
     }
   }
@@ -413,10 +432,23 @@ let lastInfo = 0;
 const flashes = [];         // visual events from merges, consumed by the renderer
 const COLLISION_SCALE = 30; // physical radii are tiny; this makes merges happen at visible distances
 
+// A merge renumbers bodies: j is removed, and the last body moves into slot j.
+// Keep any stored index (selection, follow target) pointing at the right body.
+function remapIndex(idx, ev) {
+  if (idx === ev.removed) return ev.kept;
+  if (idx === ev.moved) return ev.removed;
+  return idx;
+}
+
 function runCollisions() {
   const events = handleCollisions(w, trueScale ? 1 : COLLISION_SCALE);
   if (events.length > 0) {
-    for (const ev of events) flashes.push(ev);
+    for (const ev of events) {
+      flashes.push(ev);
+      renderer.removeTrail(ev.removed, ev.moved);
+      selected = remapIndex(selected, ev);
+      if (followIdx >= 0) followIdx = remapIndex(followIdx, ev);
+    }
     if (selected >= w.n) selected = -1;
     resetBaseline(); // merging changes the system's totals
   }
@@ -450,7 +482,12 @@ function frame(now) {
   if (substeps === MAX_SUBSTEPS) acc = 0;
 
   const orbit = (selected >= 0 && selected < w.n) ? sampleOrbit(w, selected) : null;
-  renderer.render(cam, w, aim, selected, orbit, flashes);
+
+  if (followIdx >= 0) {
+    if (followIdx < w.n) cam.target = [w.px[followIdx], w.py[followIdx], w.pz[followIdx]];
+    else setFollow(-1);
+  }
+  renderer.render(cam, w, aim, selected, orbit, flashes, followIdx);
   flashes.length = 0;
 
   if (now - lastInfo > 100) {

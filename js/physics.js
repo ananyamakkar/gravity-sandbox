@@ -1,4 +1,4 @@
-export const G = 4 * Math.PI * Math.PI;   // AU^3 / (Msun * yr^2)
+export const G = 4 * Math.PI * Math.PI; // AU^3 / (Msun * yr^2)
 
 export function createWorld(capacity = 512) {
   const f = () => new Float64Array(capacity);
@@ -28,9 +28,7 @@ export function addBody(w, { pos, vel, mass, radius = 0 }) {
 export function computeAccelerations(w) {
   const { n, px, py, pz, ax, ay, az, mass } = w;
   const eps2 = w.softening * w.softening;
-
   for (let i = 0; i < n; i++) { ax[i] = 0; ay[i] = 0; az[i] = 0; }
-
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const dx = px[j] - px[i];
@@ -38,10 +36,8 @@ export function computeAccelerations(w) {
       const dz = pz[j] - pz[i];
       const d2 = dx * dx + dy * dy + dz * dz + eps2;
       const invD3 = 1 / (d2 * Math.sqrt(d2));
-
       const fi = G * mass[j] * invD3;
       ax[i] += fi * dx; ay[i] += fi * dy; az[i] += fi * dz;
-
       const fj = G * mass[i] * invD3;
       ax[j] -= fj * dx; ay[j] -= fj * dy; az[j] -= fj * dz;
     }
@@ -51,7 +47,6 @@ export function computeAccelerations(w) {
 export function stepVerlet(w, dt) {
   const { n, px, py, pz, vx, vy, vz, ax, ay, az } = w;
   const h = dt / 2;
-
   for (let i = 0; i < n; i++) {
     vx[i] += ax[i] * h; vy[i] += ay[i] * h; vz[i] += az[i] * h;
   }
@@ -78,15 +73,22 @@ export function cloneWorld(w) {
 }
 
 // Simulates a ghost body forward and returns its path as an array of [x,y,z].
-export function predictPath(w, pos, vel, mass, steps = 400, dt = 0.002) {
+// If frameIdx >= 0, the path is drawn as seen from that body (for the follow camera).
+export function predictPath(w, pos, vel, mass, steps = 400, dt = 0.002, frameIdx = -1) {
   const g = cloneWorld(w);
   const idx = addBody(g, { pos, vel, mass });
   computeAccelerations(g);
-
   const path = [[pos[0], pos[1], pos[2]]];
+  const useFrame = frameIdx >= 0 && frameIdx < w.n;
   for (let k = 0; k < steps; k++) {
     stepVerlet(g, dt);
-    path.push([g.px[idx], g.py[idx], g.pz[idx]]);
+    let x = g.px[idx], y = g.py[idx], z = g.pz[idx];
+    if (useFrame) {
+      x += w.px[frameIdx] - g.px[frameIdx];
+      y += w.py[frameIdx] - g.py[frameIdx];
+      z += w.pz[frameIdx] - g.pz[frameIdx];
+    }
+    path.push([x, y, z]);
   }
   return path;
 }
@@ -96,24 +98,19 @@ export function predictPath(w, pos, vel, mass, steps = 400, dt = 0.002) {
 export function diagnostics(w) {
   const { n, px, py, pz, vx, vy, vz, mass } = w;
   const eps2 = w.softening * w.softening;
-
   let ke = 0, pe = 0, pscale = 0;
   const P = [0, 0, 0];
   const L = [0, 0, 0];
-
   for (let i = 0; i < n; i++) {
     const m = mass[i];
     const v2 = vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i];
     ke += 0.5 * m * v2;
     pscale += m * Math.sqrt(v2);
-
     P[0] += m * vx[i]; P[1] += m * vy[i]; P[2] += m * vz[i];
-
     // L = sum m (r x v)
     L[0] += m * (py[i] * vz[i] - pz[i] * vy[i]);
     L[1] += m * (pz[i] * vx[i] - px[i] * vz[i]);
     L[2] += m * (px[i] * vy[i] - py[i] * vx[i]);
-
     for (let j = i + 1; j < n; j++) {
       const dx = px[j] - px[i];
       const dy = py[j] - py[i];
@@ -192,7 +189,7 @@ export function stepRK4(w, dt) {
     P[c][i] = s.p0[c][i] + (dt / 6) * (s.v0[c][i] + 2 * s.v2[c][i] + 2 * s.v3[c][i] + s.v4[c][i]);
     V[c][i] = s.v0[c][i] + (dt / 6) * (s.a1[c][i] + 2 * s.a2[c][i] + 2 * s.a3[c][i] + A[c][i]);
   }
-  computeAccelerations(w);   // leave valid accelerations for the next step
+  computeAccelerations(w); // leave valid accelerations for the next step
   w.time += dt;
 }
 
@@ -210,7 +207,8 @@ export function radiusFromMass(m) {
 }
 
 // Merges overlapping bodies (inelastic, momentum-conserving).
-// Returns an array of events { x, y, z, size, big } for the renderer to flash.
+// Returns an array of events for the renderer and main loop:
+// { x, y, z, size, big, kept, removed, moved }
 export function handleCollisions(w, scaleFactor = 1) {
   const events = [];
   let i = 0;
@@ -236,7 +234,6 @@ function mergeBodies(w, i, j, events) {
   const mi = w.mass[i], mj = w.mass[j];
   const m = mi + mj;
   const wi = mi / m, wj = mj / m;
-
   w.px[i] = w.px[i] * wi + w.px[j] * wj;
   w.py[i] = w.py[i] * wi + w.py[j] * wj;
   w.pz[i] = w.pz[i] * wi + w.pz[j] * wj;
@@ -245,8 +242,9 @@ function mergeBodies(w, i, j, events) {
   w.vz[i] = w.vz[i] * wi + w.vz[j] * wj;
   w.mass[i] = m;
   w.radius[i] = radiusFromMass(m);
-
-  events.push({ x: w.px[i], y: w.py[i], z: w.pz[i], size: Math.cbrt(Math.min(mi, mj)), big: m > 0.05 });
+  // w.n has not been decremented yet, so w.n - 1 is the slot that gets moved into j
+  events.push({ x: w.px[i], y: w.py[i], z: w.pz[i], size: Math.cbrt(Math.min(mi, mj)), big: m > 0.05,
+                kept: i, removed: j, moved: w.n - 1 });
 
   // Remove j by moving the last body into its slot
   const last = w.n - 1;
