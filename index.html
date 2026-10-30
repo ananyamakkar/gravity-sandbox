@@ -31,6 +31,13 @@
         <option value="polar">Polar orbit</option>
         <option value="binary">Binary star + planet</option>
         <option value="figure8">Figure-eight (3 stars)</option>
+        <option value="earthmoon">Earth + Moon (true scale)</option>
+        <option value="moons">Moons: prograde, polar, retrograde</option>
+        <option value="trojans">Sun–Jupiter + trojans</option>
+        <option value="kozai">Kozai–Lidov oscillation</option>
+        <option value="belt">Inclined asteroid belt</option>
+        <option value="flyby">Hyperbolic flyby</option>
+        <option value="chaos">Chaotic three-body</option>
         <option value="empty">Empty space + one star</option>
       </select>
     </label>
@@ -75,6 +82,11 @@
     <label>
       Launch height: <span id="height-val">0.00 AU</span>
       <input id="height" type="range" min="-3" max="3" step="0.05" value="0">
+    </label>
+
+    <label>
+      Launch strength: <span id="gain-val">×4.0</span>
+      <input id="gain" type="range" min="0" max="4" step="0.01" value="0.6">
     </label>
 
     <div class="btn-row">

@@ -22,12 +22,14 @@ resetCamera();
 const w = createWorld();
 let currentPreset = 'earth';
 
+// Loads the current scenario and returns it (so callers can read its defaults)
 function initWorld() {
   const p = loadPreset(w, currentPreset);
   PRESET_DISTANCE = p.distance;
   cam.target = [0, 0, 0];
   cam.distance = p.distance;
   renderer.clearTrails();
+  return p;
 }
 initWorld();
 
@@ -61,14 +63,23 @@ playBtn.addEventListener('click', () => setPaused(!paused));
 stepBtn.addEventListener('click', () => { setPaused(true); stepOnce = true; });
 
 // Slider is log10(speed): -2 -> 0.01 yr/s, 2 -> 100 yr/s
-speedSlider.addEventListener('input', () => {
-  speed = Math.pow(10, Number(speedSlider.value));
-  speedLabel.textContent = speed.toFixed(speed < 1 ? 2 : 1) + ' yr/s';
-});
+function setSpeed(v) {
+  speed = v;
+  speedSlider.value = Math.log10(v);
+  speedLabel.textContent = v.toFixed(v < 1 ? 2 : 1) + ' yr/s';
+}
+speedSlider.addEventListener('input', () => setSpeed(Math.pow(10, Number(speedSlider.value))));
 
 // Selection (declared early because Restart and the scenario dropdown use it)
 let selected = -1;
 let followIdx = -1; // body the camera is locked onto, or -1
+
+// Each scenario can set its natural scale mode, speed and launch strength
+function applyPresetDefaults(p) {
+  applyScale(p.trueScale === true);
+  setSpeed(p.speed !== undefined ? p.speed : 0.5);
+  setGain(p.gain !== undefined ? p.gain : 4);
+}
 
 // Integrator choice, restart, and scenario choice
 let method = 'verlet';
@@ -77,14 +88,14 @@ document.getElementById('method').addEventListener('change', (e) => {
   resetBaseline();
 });
 document.getElementById('btn-restart').addEventListener('click', () => {
-  initWorld();
+  applyPresetDefaults(initWorld());
   selected = -1;
   setFollow(-1);
   resetBaseline();
 });
 document.getElementById('preset').addEventListener('change', (e) => {
   currentPreset = e.target.value;
-  initWorld();
+  applyPresetDefaults(initWorld());
   selected = -1;
   setFollow(-1);
   resetBaseline();
@@ -174,6 +185,19 @@ heightSlider.addEventListener('input', () => {
   heightLabel.textContent = launchHeight.toFixed(2) + ' AU';
 });
 
+// ---- UI: launch strength (drag distance in AU -> launch speed in AU/yr) ----
+// Slider is log10(gain): 0 -> x1, 4 -> x10000. Small systems (Earth-Moon) need a big gain.
+const gainSlider = document.getElementById('gain');
+const gainLabel = document.getElementById('gain-val');
+let launchGain = 4;
+
+function setGain(g) {
+  launchGain = g;
+  gainSlider.value = Math.log10(g);
+  gainLabel.textContent = '×' + (g >= 100 ? g.toFixed(0) : g.toFixed(1));
+}
+gainSlider.addEventListener('input', () => setGain(Math.pow(10, Number(gainSlider.value))));
+
 // ---- Momentum zeroing ----
 // Subtracts the centre-of-mass velocity from every body, so the system's
 // total momentum is zero and it stops drifting across the screen.
@@ -226,21 +250,21 @@ orthoBtn.addEventListener('click', () => {
 let trueScale = false;
 const scaleBtn = document.getElementById('btn-scale');
 const scaleNote = document.getElementById('scale-note');
-scaleBtn.addEventListener('click', () => {
-  trueScale = !trueScale;
-  renderer.setTrueScale(trueScale);
-  scaleBtn.textContent = trueScale ? 'True scale' : 'Visual scale';
-  scaleNote.textContent = trueScale
+
+function applyScale(v) {
+  trueScale = v;
+  renderer.setTrueScale(v);
+  scaleBtn.textContent = v ? 'True scale' : 'Visual scale';
+  scaleNote.textContent = v
     ? 'True sizes · merges only on real contact'
     : 'Sizes exaggerated · merges at 30× radius';
-});
+}
+scaleBtn.addEventListener('click', () => applyScale(!trueScale));
 
 // ---- Launch velocity ----
-const LAUNCH_GAIN = 4;
-
 function launchVelocity(start, current) {
-  const dx = (start[0] - current[0]) * LAUNCH_GAIN;
-  const dy = (start[1] - current[1]) * LAUNCH_GAIN;
+  const dx = (start[0] - current[0]) * launchGain;
+  const dy = (start[1] - current[1]) * launchGain;
   const spd = Math.hypot(dx, dy);
   const i = (inclination * Math.PI) / 180;
   const c = Math.cos(i);
@@ -421,7 +445,7 @@ canvas.addEventListener('pointerup', (e) => {
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   cam.distance *= Math.exp(e.deltaY * 0.001);
-  cam.distance = Math.min(200, Math.max(0.2, cam.distance));
+  cam.distance = Math.min(200, Math.max(0.004, cam.distance));
 }, { passive: false });
 
 // ---- Main loop ----
