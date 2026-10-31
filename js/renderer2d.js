@@ -762,6 +762,39 @@ function drawAimPlane(cam, aim) {
     ctx.setLineDash([]);
 }
 
+// ---- Overlay: axis gizmo (bottom-left corner) ----
+let showGizmo = true;
+function setShowGizmo(v) { showGizmo = v; }
+
+function drawGizmo(cam) {
+    if (!showGizmo) return;
+    const cx = 60, cy = height - 60, L = 36;      // centre and arm length in pixels
+    const m = viewMatrix(cam);
+    const axes = [
+        { label: 'X', v: [1, 0, 0], color: '#ff6b6b' },
+        { label: 'Y', v: [0, 1, 0], color: '#6bff8a' },
+        { label: 'Z', v: [0, 0, 1], color: '#6bb5ff' },
+    ].map((a) => {
+        const p = mulMatVec(m, a.v);               // axis direction in camera space
+        return { ...a, sx: cx + p[0] * L, sy: cy - p[1] * L, depth: p[2] };
+    });
+    axes.sort((a, b) => b.depth - a.depth);        // far axes first, near ones on top
+
+    ctx.lineWidth = 2;
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const a of axes) {
+        ctx.strokeStyle = a.color;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(a.sx, a.sy);
+        ctx.stroke();
+        ctx.fillStyle = a.color;
+        ctx.fillText(a.label, cx + (a.sx - cx) * 1.3, cy + (a.sy - cy) * 1.3);
+    }
+}
+
   // ---- Overlay: distance scale bar ----
   // Pixels per AU at the camera target's depth (same formula for perspective and orthographic).
   let showScaleBar = true;
@@ -795,7 +828,7 @@ function drawAimPlane(cam, aim) {
     ctx.textAlign = 'start';
   }
 
-  // ---- Overlay: gravity field (rubber-sheet grid) ---- // NEW (E)
+  // ---- Overlay: gravity field (rubber-sheet grid) ---- 
   let showField = false;
   function setShowField(v) { showField = v; }
 
@@ -812,7 +845,7 @@ function drawAimPlane(cam, aim) {
     const cx = Math.round(cam.target[0] / step) * step;
     const cy = Math.round(cam.target[1] / step) * step;
 
-    // ignore bodies far too light to dent the sheet (keeps it fast)
+    // ignore bodies far too light to dent the sheet 
     const src = [];
     for (let i = 0; i < w.n; i++) if (w.mass[i] > maxM * 1e-4) src.push(i);
 
@@ -856,7 +889,7 @@ function drawAimPlane(cam, aim) {
     ctx.fillRect(0, 0, width, height);
     drawStarfield(cam);
     drawGrid(cam);
-    drawGravityField(cam, w);    // NEW (E)
+    drawGravityField(cam, w);    
     drawHabitableZone(cam, w);
     drawOrbitPlane(cam, orbit);
     drawOrbit(cam, orbit);
@@ -904,10 +937,11 @@ function drawAimPlane(cam, aim) {
     if (showAcc) drawArrows(cam, w, w.ax, w.ay, w.az, 'rgba(255, 150, 90, 0.9)');
     drawFlashes(cam);
     drawScaleBar(cam);
+    drawGizmo(cam);
   }
 
   return { resize, render, recordTrails, clearTrails, removeTrail,
            setTrueScale, setTrailLength, setShowCOM,
            setShowVel, setShowAcc, setShowHill,
-           setShowHZ, setShowPlane, setShowScaleBar, setShowField }; // NEW (E): setShowField
+           setShowHZ, setShowPlane, setShowScaleBar, setShowField, setShowGizmo }; 
 }

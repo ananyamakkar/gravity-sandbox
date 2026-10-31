@@ -273,6 +273,7 @@ document.getElementById('autozero').addEventListener('change', (e) => {
 // ---- UI: camera buttons ----
 document.getElementById('btn-top').addEventListener('click', () => { cam.pitch = Math.PI / 2; });
 document.getElementById('btn-side').addEventListener('click', () => { cam.pitch = 0.05; });
+document.getElementById('btn-bottom').addEventListener('click', () => { cam.pitch = -Math.PI / 2; });
 document.getElementById('btn-reset').addEventListener('click', () => { setFollow(-1); resetCamera(); });
 
 
@@ -319,6 +320,9 @@ document.getElementById('ov-scale').addEventListener('change', (e) => {
 });
 document.getElementById('ov-field').addEventListener('change', (e) => {
     renderer.setShowField(e.target.checked);
+});
+document.getElementById('ov-gizmo').addEventListener('change', (e) => {
+    renderer.setShowGizmo(e.target.checked);
 });
 
 
@@ -636,7 +640,7 @@ canvas.addEventListener('pointermove', (e) => {
         const dx = e.clientX - lastX;
         const dy = e.clientY - lastY;
         cam.yaw -= dx * 0.005;
-        cam.pitch = Math.min(Math.PI / 2, Math.max(0.05, cam.pitch + dy * 0.005));
+       cam.pitch = Math.min(Math.PI / 2, Math.max(-Math.PI / 2, cam.pitch + dy * 0.005));
     } else if (mode === 'pan') {
         const p0 = unproject(cam, lastX, lastY, W(), H(), 0);
         const p1 = unproject(cam, e.clientX, e.clientY, W(), H(), 0);
