@@ -1,6 +1,6 @@
 import { createCamera, project, unproject } from './camera.js';
 import { createRenderer } from './renderer2d.js';
-import { createWorld, addBody, computeAccelerations, step, predictPath, diagnostics, radiusFromMass, handleCollisions, adaptiveDt } from './physics.js';
+import { createWorld, addBody, computeAccelerations, step, predictPath, diagnostics, radiusFromMass, handleCollisions, adaptiveDt, removeBody } from './physics.js';
 import { orbitalElements, sampleOrbit, AU_YR_TO_KMS } from './orbits.js';
 import { loadPreset } from './presets.js';
 
@@ -68,7 +68,7 @@ function setSpeed(v) {
 speedSlider.addEventListener('input', () => setSpeed(Math.pow(10, Number(speedSlider.value))));
 
 // Selection (declared early because Restart and the scenario dropdown use it)
-let selected = -1;
+let selected = -1; let tool = 'launch';
 let followIdx = -1; // body the camera is locked onto, or -1
 
 // Each scenario can set its natural scale mode, speed and launch strength
@@ -410,6 +410,17 @@ const CLICK_THRESHOLD = 5;
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+const toolBtns = document.querySelectorAll('#tools button');
+toolBtns.forEach((b) => {
+  b.addEventListener('click', () => {
+    tool = b.dataset.tool;
+    toolBtns.forEach((x) => x.classList.toggle('active', x === b));
+    canvas.style.cursor =
+      tool === 'delete' ? 'not-allowed' :
+      tool === 'move'   ? 'grab' : 'crosshair';
+  });
+});
+
 canvas.addEventListener('pointerdown', (e) => {
   lastX = downX = e.clientX;
   lastY = downY = e.clientY;
@@ -419,12 +430,16 @@ canvas.addEventListener('pointerdown', (e) => {
     setFollow(-1);
     mode = 'pan';
   } else if (e.button === 0) {
+  if (tool === 'launch') {
     const p = unproject(cam, e.clientX, e.clientY, W(), H(), launchHeight);
     if (p) {
       mode = 'launch';
       aim = { start: p, current: p, path: null };
     }
   } else {
+    mode = 'pick';   // Select / Move / Delete all start by clicking a body
+  }
+} else {
     mode = 'rotate';
   }
 });
@@ -460,6 +475,14 @@ canvas.addEventListener('pointermove', (e) => {
 });
 
 canvas.addEventListener('pointerup', (e) => {
+  if (mode === 'pick') {
+  const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+  if (moved < CLICK_THRESHOLD) {
+    const i = pickBody(e.clientX, e.clientY);
+    if (tool === 'select') selected = i;
+    else if (tool === 'delete' && i >= 0) deleteBody(i);
+  }
+} 
   if (mode === 'launch' && aim) {
     const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
     if (moved < CLICK_THRESHOLD) {
@@ -496,6 +519,19 @@ function remapIndex(idx, ev) {
   if (idx === ev.removed) return ev.kept;
   if (idx === ev.moved) return ev.removed;
   return idx;
+}
+
+function deleteBody(i) {
+  const { removed, moved } = removeBody(w, i);
+  renderer.removeTrail(removed, moved);
+
+  if (selected === removed) selected = -1;
+  else if (selected === moved) selected = removed;
+
+  if (followIdx === removed) setFollow(-1);
+  else if (followIdx === moved) followIdx = removed;
+
+  resetBaseline();
 }
 
 function runCollisions() {

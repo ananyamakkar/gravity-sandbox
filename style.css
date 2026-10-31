@@ -149,3 +149,8 @@ canvas {
   letter-spacing: 0.06em;
   color: #8fa0d0;
 }
+
+#toolbar #tools button.active {
+  background: #3a5bd9;
+  color: #fff;
+}

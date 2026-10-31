@@ -25,6 +25,18 @@ export function addBody(w, { pos, vel, mass, radius = 0 }) {
   return i;
 }
 
+export function removeBody(w, j) {
+  const last = w.n - 1;
+  if (j !== last) {
+    for (const key of ['px','py','pz','vx','vy','vz','ax','ay','az','mass','radius']) {
+      w[key][j] = w[key][last];
+    }
+  }
+  w.n--;
+  computeAccelerations(w);
+  return { removed: j, moved: last };
+}
+
 export function computeAccelerations(w) {
   const { n, px, py, pz, ax, ay, az, mass } = w;
   const eps2 = w.softening * w.softening;
