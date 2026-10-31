@@ -185,6 +185,7 @@ export function createRenderer(canvas) {
 
   // Trail colour by body type: stars match their glow, planets go by mass
   function trailColor(w, i) {
+    if (w.color[i]) return w.color[i];
     const m = w.mass[i];
     if (m > 0.05) return starColor(m);            // star
     if (m > GIANT_MASS) return [255, 190, 120];   // gas giant: tan/orange
@@ -420,8 +421,8 @@ export function createRenderer(canvas) {
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  function drawStar(p, mass, r, f) {
-    const [cr, cg, cb] = starColor(mass);
+function drawStar(p, mass, r, f, override = null) {
+    const [cr, cg, cb] = override || starColor(mass);
     const pulse = 1 + 0.06 * Math.sin(performance.now() / 600 + mass * 10);
     const halo = r * 6 * pulse;
     ctx.globalCompositeOperation = 'lighter';
@@ -493,9 +494,10 @@ export function createRenderer(canvas) {
 
     // Base colour by type
     let base;
-    if (isGiant) base = [225, 185, 130];          // tan gas giant
-    else if (m > ROCKY_MASS) base = [90, 170, 255]; // Earth-like
-    else base = [175, 150, 125];                  // small rocky: brownish grey
+    if (w.color[i]) base = w.color[i];
+    else if (isGiant) base = [225, 185, 130];
+    else if (m > ROCKY_MASS) base = [90, 170, 255];
+    else base = [175, 150, 125];
 
     // Light direction in camera space (defaults to "from the viewer")
     let lx = 0, ly = 0, lz = -1;
@@ -856,7 +858,7 @@ export function createRenderer(canvas) {
         : Math.max(2, visRadius * p.scale);
       const f = fog(cam, p);
 
-      if (isStar) drawStar(p, w.mass[i], r, f);
+      if (isStar) drawStar(p, w.mass[i], r, f, w.color[i]);
       else drawPlanet(cam, w, i, p, r, f);
 
       if (i === selected) {

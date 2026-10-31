@@ -10,6 +10,7 @@ export function createWorld(capacity = 512) {
     ax: f(), ay: f(), az: f(),
     mass: f(),
     radius: f(),
+    color: new Array(capacity).fill(null),   // null = automatic, or [r, g, b]
     softening: 1e-4,
     time: 0,
   };
@@ -22,6 +23,7 @@ export function addBody(w, { pos, vel, mass, radius = 0 }) {
   w.vx[i] = vel[0]; w.vy[i] = vel[1]; w.vz[i] = vel[2];
   w.mass[i] = mass;
   w.radius[i] = radius;
+  w.color[i] = color;   
   return i;
 }
 
@@ -32,6 +34,8 @@ export function removeBody(w, j) {
       w[key][j] = w[key][last];
     }
   }
+  w.color[j] = w.color[last];
+  w.color[last] = null;
   w.n--;
   computeAccelerations(w);
   return { removed: j, moved: last };
@@ -254,6 +258,7 @@ function mergeBodies(w, i, j, events) {
   w.vz[i] = w.vz[i] * wi + w.vz[j] * wj;
   w.mass[i] = m;
   w.radius[i] = radiusFromMass(m);
+  if (mj > mi) w.color[i] = w.color[j];
   // w.n has not been decremented yet, so w.n - 1 is the slot that gets moved into j
   events.push({ x: w.px[i], y: w.py[i], z: w.pz[i], size: Math.cbrt(Math.min(mi, mj)), big: m > 0.05,
                 kept: i, removed: j, moved: w.n - 1 });
@@ -265,6 +270,8 @@ function mergeBodies(w, i, j, events) {
       w[key][j] = w[key][last];
     }
   }
+  w.color[j] = w.color[last];
+  w.color[last] = null;
   w.n--;
   computeAccelerations(w);
 }

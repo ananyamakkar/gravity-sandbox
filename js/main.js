@@ -414,6 +414,7 @@ function updateInfo() {
 // ---- Edit panel: change mass and radius of the selected body ----
 // The panel is built ONCE per selected body (not every refresh), otherwise
 // rewriting its HTML would reset the sliders while you drag them.
+
 const editEl = document.getElementById('edit');
 const AU_KM = 149597870.7;
 let editFor = -1;   // which body the panel is currently built for
@@ -432,6 +433,10 @@ function buildEdit(i) {
         <label>Radius: <span id="edit-rad-val"></span>
           <input id="edit-rad" type="range" min="-9" max="-1" step="0.01">
         </label>
+        <label>Color:
+          <input id="edit-color" type="color" value="#cccccc">
+        </label>
+        <button id="edit-color-auto">Auto color</button>
         <div class="hint">Changing mass resets radius to match (constant density).
         Radius affects collisions and True-scale drawing.</div>`;
 
@@ -439,6 +444,7 @@ function buildEdit(i) {
     const massVal = document.getElementById('edit-mass-val');
     const radIn   = document.getElementById('edit-rad');
     const radVal  = document.getElementById('edit-rad-val');
+    const colIn   = document.getElementById('edit-color');
 
     const showMass = () => {
         massVal.textContent = fmtMass(w.mass[i]);
@@ -465,6 +471,22 @@ function buildEdit(i) {
         if (selected !== i || i >= w.n) return;
         w.radius[i] = Math.pow(10, Number(radIn.value));
         showRad();
+    });
+
+    // ---- color ----
+    const hexToRgb = (h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
+    const rgbToHex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+    if (w.color[i]) colIn.value = rgbToHex(w.color[i]);
+
+    colIn.addEventListener('input', () => {
+        if (selected !== i || i >= w.n) return;
+        w.color[i] = hexToRgb(colIn.value);
+    });
+
+    document.getElementById('edit-color-auto').addEventListener('click', () => {
+        if (selected !== i || i >= w.n) return;
+        w.color[i] = null;
+        colIn.value = '#cccccc';
     });
 }
 

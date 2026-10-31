@@ -173,3 +173,43 @@ canvas {
 #edit label { display: block; margin-top: 8px; }
 #edit input[type="range"] { width: 100%; }
 #edit .hint { margin-top: 8px; font-size: 11px; color: #8fa0d0; }
+
+#edit input[type="color"] {
+  width: 100%;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+#edit button {
+  margin-top: 8px;
+  width: 100%;
+  padding: 5px;
+  background: rgba(40, 50, 90, 0.8);
+  color: #cfd8ff;
+  border: 1px solid rgba(120, 150, 255, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+}
+#edit button:hover { background: rgba(60, 80, 150, 0.9); }
+
+#edit input[type="color"] {
+  width: 100%;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+#edit button {
+  margin-top: 8px;
+  width: 100%;
+  padding: 5px;
+  background: rgba(40, 50, 90, 0.8);
+  color: #cfd8ff;
+  border: 1px solid rgba(120, 150, 255, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+}
+#edit button:hover { background: rgba(60, 80, 150, 0.9); }
