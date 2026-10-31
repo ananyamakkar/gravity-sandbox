@@ -16,7 +16,7 @@ export function createWorld(capacity = 512) {
   };
 }
 
-export function addBody(w, { pos, vel, mass, radius = 0 }) {
+export function addBody(w, { pos, vel, mass, radius = 0, color = null }) {
   if (w.n >= w.capacity) throw new Error('World is full');
   const i = w.n++;
   w.px[i] = pos[0]; w.py[i] = pos[1]; w.pz[i] = pos[2];
