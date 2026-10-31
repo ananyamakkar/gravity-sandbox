@@ -276,6 +276,13 @@ document.getElementById('btn-side').addEventListener('click', () => { cam.pitch 
 document.getElementById('btn-bottom').addEventListener('click', () => { cam.pitch = -Math.PI / 2; });
 document.getElementById('btn-reset').addEventListener('click', () => { setFollow(-1); resetCamera(); });
 
+// ---- UI: slow auto-rotate ----
+let autoRotate = false;
+const AUTO_ROTATE_SPEED = 0.15;   // radians per real second (about 42 s per full turn)
+document.getElementById('auto-rotate').addEventListener('change', (e) => {
+    autoRotate = e.target.checked;
+});
+
 
 // ---- UI: follow camera ----
 const followBtn = document.getElementById('btn-follow');
@@ -778,7 +785,8 @@ function frame(now) {
     }
     if (substeps === MAX_SUBSTEPS) acc = 0;
 
-
+  // drift the camera around, but never fight the user while they are dragging
+  if (autoRotate && mode === null) cam.yaw += real * AUTO_ROTATE_SPEED;
     const orbit = (selected >= 0 && selected < w.n) ? sampleOrbit(w, selected) : null;
 
 
