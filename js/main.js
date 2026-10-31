@@ -76,7 +76,7 @@ function applyPresetDefaults(p) {
   applyScale(p.trueScale === true);
   setSpeed(p.speed !== undefined ? p.speed : 0.5);
   setGain(p.gain !== undefined ? p.gain : 4);
-  document.getElementById('chaos-note').hidden = !p.chaotic; // NEW (B)
+  document.getElementById('chaos-note').hidden = !p.chaotic;
 }
 
 // Integrator choice, restart, and scenario choice
@@ -254,9 +254,18 @@ orthoBtn.addEventListener('click', () => {
   orthoBtn.textContent = cam.ortho ? 'Orthographic' : 'Perspective';
 });
 
-// ---- UI: overlay toggles ---- // NEW (B)
+// ---- UI: overlay toggles ----
 document.getElementById('ov-com').addEventListener('change', (e) => {
   renderer.setShowCOM(e.target.checked);
+});
+document.getElementById('ov-vel').addEventListener('change', (e) => { // NEW (C)
+  renderer.setShowVel(e.target.checked);
+});
+document.getElementById('ov-acc').addEventListener('change', (e) => { // NEW (C)
+  renderer.setShowAcc(e.target.checked);
+});
+document.getElementById('ov-hill').addEventListener('change', (e) => { // NEW (C)
+  renderer.setShowHill(e.target.checked);
 });
 
 // ---- UI: visual vs true scale ----

@@ -1,5 +1,6 @@
 import { project, viewMatrix } from './camera.js';
 import { mulMat, mulMatVec } from './vec3.js';
+import { findDominant } from './orbits.js'; // NEW (C)
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
@@ -556,7 +557,7 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = 1;
   }
 
-  // ---- Overlay: center of mass ---- // NEW (B)
+  // ---- Overlay: center of mass ----
   let showCOM = false;
   function setShowCOM(v) { showCOM = v; }
 
@@ -584,6 +585,76 @@ export function createRenderer(canvas) {
     ctx.fillText('CoM', p.x + 10, p.y - 8);
   }
 
+  // ---- Overlay: velocity / acceleration arrows ---- // NEW (C)
+  let showVel = false, showAcc = false;
+  function setShowVel(v) { showVel = v; }
+  function setShowAcc(v) { showAcc = v; }
+
+  // Arrow length in pixels = 12 + 50 * (this body's magnitude / largest magnitude)
+  function drawArrows(cam, w, X, Y, Z, color) {
+    let maxMag = 0;
+    for (let i = 0; i < w.n; i++) {
+      maxMag = Math.max(maxMag, Math.hypot(X[i], Y[i], Z[i]));
+    }
+    if (maxMag === 0) return;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < w.n; i++) {
+      const mag = Math.hypot(X[i], Y[i], Z[i]);
+      if (mag === 0) continue;
+      const pos = [w.px[i], w.py[i], w.pz[i]];
+      const p = project(cam, pos, width, height);
+      if (!p) continue;
+      const worldLen = (12 + 50 * (mag / maxMag)) / p.scale;
+      const tip = project(cam, [
+        pos[0] + (X[i] / mag) * worldLen,
+        pos[1] + (Y[i] / mag) * worldLen,
+        pos[2] + (Z[i] / mag) * worldLen,
+      ], width, height);
+      if (!tip) continue;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.stroke();
+      // arrow head
+      const ang = Math.atan2(tip.y - p.y, tip.x - p.x);
+      const hs = 6;
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.lineTo(tip.x - hs * Math.cos(ang - 0.4), tip.y - hs * Math.sin(ang - 0.4));
+      ctx.lineTo(tip.x - hs * Math.cos(ang + 0.4), tip.y - hs * Math.sin(ang + 0.4));
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // ---- Overlay: Hill spheres ---- // NEW (C)
+  let showHill = false;
+  function setShowHill(v) { showHill = v; }
+
+  function drawHill(cam, w) {
+    if (!showHill) return;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(190, 140, 255, 0.6)';
+    for (let i = 0; i < w.n; i++) {
+      const j = findDominant(w, i);
+      if (j < 0 || w.mass[j] <= w.mass[i]) continue; // parent must be heavier
+      const dx = w.px[i] - w.px[j], dy = w.py[i] - w.py[j], dz = w.pz[i] - w.pz[j];
+      const a = Math.hypot(dx, dy, dz);
+      const rH = a * Math.cbrt(w.mass[i] / (3 * w.mass[j]));
+      const p = project(cam, [w.px[i], w.py[i], w.pz[i]], width, height);
+      if (!p) continue;
+      const R = rH * p.scale;
+      if (R < 3 || R > 4000) continue; // too small to see / absurdly large
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, R, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
   function render(cam, w, aim, selected = -1, orbit = null, flashes = [], follow = -1) {
     addFlashes(flashes);
     ctx.fillStyle = '#05060a';
@@ -593,7 +664,8 @@ export function createRenderer(canvas) {
     drawOrbit(cam, orbit);
     drawTrails(cam, w, follow);
     drawAim(cam, aim);
-    drawCOM(cam, w); // NEW (B)
+    drawCOM(cam, w);
+    drawHill(cam, w); // NEW (C)
 
     // Project everything, then sort far -> near (painter's algorithm)
     const items = [];
@@ -628,9 +700,13 @@ export function createRenderer(canvas) {
         ctx.stroke();
       }
     }
+
+    if (showVel) drawArrows(cam, w, w.vx, w.vy, w.vz, 'rgba(120, 255, 160, 0.9)'); // NEW (C)
+    if (showAcc) drawArrows(cam, w, w.ax, w.ay, w.az, 'rgba(255, 150, 90, 0.9)');  // NEW (C)
     drawFlashes(cam);
   }
 
   return { resize, render, recordTrails, clearTrails, removeTrail,
-           setTrueScale, setTrailLength, setShowCOM }; // NEW (B): setShowCOM
+           setTrueScale, setTrailLength, setShowCOM,
+           setShowVel, setShowAcc, setShowHill }; // NEW (C)
 }
