@@ -1,6 +1,6 @@
 import { project, viewMatrix } from './camera.js';
 import { mulMat, mulMatVec } from './vec3.js';
-import { findDominant } from './orbits.js'; // NEW (C)
+import { findDominant } from './orbits.js';
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
@@ -585,7 +585,7 @@ export function createRenderer(canvas) {
     ctx.fillText('CoM', p.x + 10, p.y - 8);
   }
 
-  // ---- Overlay: velocity / acceleration arrows ---- // NEW (C)
+  // ---- Overlay: velocity / acceleration arrows ----
   let showVel = false, showAcc = false;
   function setShowVel(v) { showVel = v; }
   function setShowAcc(v) { showAcc = v; }
@@ -629,7 +629,7 @@ export function createRenderer(canvas) {
     }
   }
 
-  // ---- Overlay: Hill spheres ---- // NEW (C)
+  // ---- Overlay: Hill spheres ----
   let showHill = false;
   function setShowHill(v) { showHill = v; }
 
@@ -655,17 +655,128 @@ export function createRenderer(canvas) {
     ctx.setLineDash([]);
   }
 
+  // ---- Overlay: habitable zone ---- // NEW (D)
+  // Luminosity from mass: L ~ M^3.5 (in solar units). Zone edges: 0.95*sqrt(L) to 1.37*sqrt(L) AU.
+  let showHZ = false;
+  function setShowHZ(v) { showHZ = v; }
+
+  // Points of a circle in the plane z = cz, as projected screen points (null if any is off-camera)
+  function projectedCircle(cam, cx, cy, cz, radius, steps = 96) {
+    const pts = [];
+    for (let k = 0; k < steps; k++) {
+      const a = (k / steps) * Math.PI * 2;
+      const q = project(cam, [cx + radius * Math.cos(a), cy + radius * Math.sin(a), cz], width, height);
+      if (!q) return null;
+      pts.push(q);
+    }
+    return pts;
+  }
+
+  function drawHabitableZone(cam, w) {
+    if (!showHZ) return;
+    for (let i = 0; i < w.n; i++) {
+      if (w.mass[i] <= 0.05) continue; // only stars
+      const lum = Math.pow(w.mass[i], 3.5);
+      const inner = 0.95 * Math.sqrt(lum);
+      const outer = 1.37 * Math.sqrt(lum);
+      const a = projectedCircle(cam, w.px[i], w.py[i], w.pz[i], outer);
+      const b = projectedCircle(cam, w.px[i], w.py[i], w.pz[i], inner);
+      if (!a || !b) continue;
+      ctx.beginPath();
+      a.forEach((q, k) => (k === 0 ? ctx.moveTo(q.x, q.y) : ctx.lineTo(q.x, q.y)));
+      ctx.closePath();
+      b.forEach((q, k) => (k === 0 ? ctx.moveTo(q.x, q.y) : ctx.lineTo(q.x, q.y)));
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(80, 255, 140, 0.10)';
+      ctx.fill('evenodd');
+      ctx.strokeStyle = 'rgba(80, 255, 140, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
+  // ---- Overlay: orbit plane disc for the selected body ---- // NEW (D)
+  let showPlane = false;
+  function setShowPlane(v) { showPlane = v; }
+
+  function drawOrbitPlane(cam, orbit) {
+    if (!showPlane || !orbit || !orbit.pHat) return;
+    const c = orbit.center;
+    // Radius: a bit bigger than the farthest orbit point (capped so hyperbolas stay sane)
+    let R = 0;
+    for (const pt of orbit.points) {
+      R = Math.max(R, Math.hypot(pt[0] - c[0], pt[1] - c[1], pt[2] - c[2]));
+    }
+    R = Math.min(R * 1.1, cam.distance * 3);
+    const steps = 96;
+    ctx.beginPath();
+    let started = false;
+    for (let k = 0; k < steps; k++) {
+      const a = (k / steps) * Math.PI * 2;
+      const ca = Math.cos(a) * R, sa = Math.sin(a) * R;
+      const q = project(cam, [
+        c[0] + orbit.pHat[0] * ca + orbit.qHat[0] * sa,
+        c[1] + orbit.pHat[1] * ca + orbit.qHat[1] * sa,
+        c[2] + orbit.pHat[2] * ca + orbit.qHat[2] * sa,
+      ], width, height);
+      if (!q) { started = false; continue; }
+      if (!started) { ctx.moveTo(q.x, q.y); started = true; }
+      else ctx.lineTo(q.x, q.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255, 220, 120, 0.07)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 220, 120, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // ---- Overlay: distance scale bar ---- // NEW (D)
+  // Pixels per AU at the camera target's depth (same formula for perspective and orthographic).
+  let showScaleBar = true;
+  function setShowScaleBar(v) { showScaleBar = v; }
+
+  function drawScaleBar(cam) {
+    if (!showScaleBar) return;
+    const pxPerAU = (height / 2) / (cam.distance * Math.tan(cam.fov / 2));
+    const targetPx = 120;
+    const au = niceStep(targetPx / pxPerAU);
+    const len = au * pxPerAU;
+    const x0 = width / 2 - len / 2;
+    const x1 = width / 2 + len / 2;
+    const y = height - 28;
+
+    ctx.strokeStyle = 'rgba(200, 215, 255, 0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x0, y); ctx.lineTo(x1, y);
+    ctx.moveTo(x0, y - 5); ctx.lineTo(x0, y + 5);
+    ctx.moveTo(x1, y - 5); ctx.lineTo(x1, y + 5);
+    ctx.stroke();
+
+    let label;
+    if (au >= 0.01) label = fmtAU(au) + ' AU';
+    else label = Math.round(au * 149597870.7).toLocaleString() + ' km';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(200, 215, 255, 0.9)';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, width / 2, y - 9);
+    ctx.textAlign = 'start';
+  }
+
   function render(cam, w, aim, selected = -1, orbit = null, flashes = [], follow = -1) {
     addFlashes(flashes);
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
     drawStarfield(cam);
     drawGrid(cam);
+    drawHabitableZone(cam, w);   // NEW (D)
+    drawOrbitPlane(cam, orbit);  // NEW (D)
     drawOrbit(cam, orbit);
     drawTrails(cam, w, follow);
     drawAim(cam, aim);
     drawCOM(cam, w);
-    drawHill(cam, w); // NEW (C)
+    drawHill(cam, w);
 
     // Project everything, then sort far -> near (painter's algorithm)
     const items = [];
@@ -701,12 +812,14 @@ export function createRenderer(canvas) {
       }
     }
 
-    if (showVel) drawArrows(cam, w, w.vx, w.vy, w.vz, 'rgba(120, 255, 160, 0.9)'); // NEW (C)
-    if (showAcc) drawArrows(cam, w, w.ax, w.ay, w.az, 'rgba(255, 150, 90, 0.9)');  // NEW (C)
+    if (showVel) drawArrows(cam, w, w.vx, w.vy, w.vz, 'rgba(120, 255, 160, 0.9)');
+    if (showAcc) drawArrows(cam, w, w.ax, w.ay, w.az, 'rgba(255, 150, 90, 0.9)');
     drawFlashes(cam);
+    drawScaleBar(cam); // NEW (D)
   }
 
   return { resize, render, recordTrails, clearTrails, removeTrail,
            setTrueScale, setTrailLength, setShowCOM,
-           setShowVel, setShowAcc, setShowHill }; // NEW (C)
+           setShowVel, setShowAcc, setShowHill,
+           setShowHZ, setShowPlane, setShowScaleBar }; // NEW (D)
 }

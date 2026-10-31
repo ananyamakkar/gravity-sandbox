@@ -258,14 +258,23 @@ orthoBtn.addEventListener('click', () => {
 document.getElementById('ov-com').addEventListener('change', (e) => {
   renderer.setShowCOM(e.target.checked);
 });
-document.getElementById('ov-vel').addEventListener('change', (e) => { // NEW (C)
+document.getElementById('ov-vel').addEventListener('change', (e) => {
   renderer.setShowVel(e.target.checked);
 });
-document.getElementById('ov-acc').addEventListener('change', (e) => { // NEW (C)
+document.getElementById('ov-acc').addEventListener('change', (e) => {
   renderer.setShowAcc(e.target.checked);
 });
-document.getElementById('ov-hill').addEventListener('change', (e) => { // NEW (C)
+document.getElementById('ov-hill').addEventListener('change', (e) => {
   renderer.setShowHill(e.target.checked);
+});
+document.getElementById('ov-hz').addEventListener('change', (e) => { // NEW (D)
+  renderer.setShowHZ(e.target.checked);
+});
+document.getElementById('ov-plane').addEventListener('change', (e) => { // NEW (D)
+  renderer.setShowPlane(e.target.checked);
+});
+document.getElementById('ov-scale').addEventListener('change', (e) => { // NEW (D)
+  renderer.setShowScaleBar(e.target.checked);
 });
 
 // ---- UI: visual vs true scale ----

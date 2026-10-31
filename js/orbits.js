@@ -164,5 +164,5 @@ export function sampleOrbit(w, i, count = 180) {
     nodeDown = tryNode(nuNode + Math.PI);
   }
 
-  return { points, periapsis, apoapsis, nodeUp, nodeDown, center };
+  return { points, periapsis, apoapsis, nodeUp, nodeDown, center, pHat, qHat };
 }

@@ -9,7 +9,6 @@
 <body>
   <canvas id="view"></canvas>
   <div id="clock"></div>
-
   <div id="toolbar">
     <div class="btn-row">
       <button id="btn-play">Pause</button>
@@ -17,12 +16,10 @@
       <button id="btn-restart">Restart</button>
       <button id="btn-rev">Reverse</button>
     </div>
-
     <label>
       Speed: <span id="speed-val">0.50 yr/s</span>
       <input id="speed" type="range" min="-2" max="2" step="0.01" value="-0.301">
     </label>
-
     <label>
       Scenario:
       <select id="preset">
@@ -42,11 +39,9 @@
         <option value="empty">Empty space + one star</option>
       </select>
     </label>
-
     <label class="check">
       <input id="adaptive" type="checkbox" checked> Adaptive timestep
     </label>
-
     <label>
       Integrator:
       <select id="method">
@@ -55,7 +50,6 @@
         <option value="euler">Euler (bad)</option>
       </select>
     </label>
-
     <label>
       Launch body:
       <select id="body-type">
@@ -69,37 +63,30 @@
         <option value="custom">Custom</option>
       </select>
     </label>
-
     <label>
       Mass: <span id="mass-val"></span>
       <input id="mass" type="range" min="-17" max="1.5" step="0.01" value="-5.52">
     </label>
-
     <label>
       Inclination: <span id="incl-val">0°</span>
       <input id="incl" type="range" min="-90" max="90" step="1" value="0">
     </label>
-
     <label>
       Launch height: <span id="height-val">0.00 AU</span>
       <input id="height" type="range" min="-3" max="3" step="0.05" value="0">
     </label>
-
     <label>
       Launch strength: <span id="gain-val">×4.0</span>
       <input id="gain" type="range" min="0" max="4" step="0.01" value="0.6">
     </label>
-
     <label>
       Trail length: <span id="trail-val">200</span>
       <input id="trail" type="range" min="0" max="600" step="10" value="200">
     </label>
-
     <label>
-  Softening: <span id="soft-val">1.0e-4 AU</span>
-  <input id="soft" type="range" min="-6" max="-1" step="0.1" value="-4">
-</label>
-
+      Softening: <span id="soft-val">1.0e-4 AU</span>
+      <input id="soft" type="range" min="-6" max="-1" step="0.1" value="-4">
+    </label>
     <div class="btn-row">
       <button id="btn-zero">Zero momentum</button>
     </div>
@@ -108,18 +95,27 @@
     </label>
 
     <div class="sec-title">Overlays</div>
-<label class="check">
-  <input id="ov-com" type="checkbox"> Center of mass
-</label>
-<label class="check">
-  <input id="ov-vel" type="checkbox"> Velocity arrows
-</label>
-<label class="check">
-  <input id="ov-acc" type="checkbox"> Acceleration arrows
-</label>
-<label class="check">
-  <input id="ov-hill" type="checkbox"> Hill spheres
-</label>
+    <label class="check">
+      <input id="ov-com" type="checkbox"> Center of mass
+    </label>
+    <label class="check">
+      <input id="ov-vel" type="checkbox"> Velocity arrows
+    </label>
+    <label class="check">
+      <input id="ov-acc" type="checkbox"> Acceleration arrows
+    </label>
+    <label class="check">
+      <input id="ov-hill" type="checkbox"> Hill spheres
+    </label>
+    <label class="check">
+      <input id="ov-hz" type="checkbox"> Habitable zone
+    </label>
+    <label class="check">
+      <input id="ov-plane" type="checkbox"> Orbit plane (selected)
+    </label>
+    <label class="check">
+      <input id="ov-scale" type="checkbox" checked> Scale bar
+    </label>
 
     <div class="btn-row">
       <button id="btn-top">Top-down</button>
@@ -129,23 +125,19 @@
       <button id="btn-scale">Visual scale</button>
       <button id="btn-follow">Follow selected</button>
     </div>
-
     <div class="hint" id="scale-note">Sizes exaggerated · merges at 30× radius</div>
     <div class="hint" id="chaos-note" hidden>
-  ⚠ Chaotic system: tiny numerical differences grow exponentially, so this run
-  will diverge from a "true" one over long times. That's physics, not a bug.
-</div>
-
+      ⚠ Chaotic system: tiny numerical differences grow exponentially, so this run
+      will diverge from a "true" one over long times. That's physics, not a bug.
+    </div>
     <div class="hint">
       Left-drag: launch · Click body: select<br>
       Right-drag: rotate · Shift+drag or middle-drag: pan<br>
       Scroll: zoom · Space: pause
     </div>
   </div>
-
   <div id="info" hidden></div>
   <div id="cons"></div>
-
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
