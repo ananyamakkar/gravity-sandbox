@@ -267,14 +267,17 @@ document.getElementById('ov-acc').addEventListener('change', (e) => {
 document.getElementById('ov-hill').addEventListener('change', (e) => {
   renderer.setShowHill(e.target.checked);
 });
-document.getElementById('ov-hz').addEventListener('change', (e) => { // NEW (D)
+document.getElementById('ov-hz').addEventListener('change', (e) => {
   renderer.setShowHZ(e.target.checked);
 });
-document.getElementById('ov-plane').addEventListener('change', (e) => { // NEW (D)
+document.getElementById('ov-plane').addEventListener('change', (e) => {
   renderer.setShowPlane(e.target.checked);
 });
-document.getElementById('ov-scale').addEventListener('change', (e) => { // NEW (D)
+document.getElementById('ov-scale').addEventListener('change', (e) => {
   renderer.setShowScaleBar(e.target.checked);
+});
+document.getElementById('ov-field').addEventListener('change', (e) => { // NEW (E)
+  renderer.setShowField(e.target.checked);
 });
 
 // ---- UI: visual vs true scale ----

@@ -655,7 +655,7 @@ export function createRenderer(canvas) {
     ctx.setLineDash([]);
   }
 
-  // ---- Overlay: habitable zone ---- // NEW (D)
+  // ---- Overlay: habitable zone ----
   // Luminosity from mass: L ~ M^3.5 (in solar units). Zone edges: 0.95*sqrt(L) to 1.37*sqrt(L) AU.
   let showHZ = false;
   function setShowHZ(v) { showHZ = v; }
@@ -695,7 +695,7 @@ export function createRenderer(canvas) {
     }
   }
 
-  // ---- Overlay: orbit plane disc for the selected body ---- // NEW (D)
+  // ---- Overlay: orbit plane disc for the selected body ----
   let showPlane = false;
   function setShowPlane(v) { showPlane = v; }
 
@@ -731,7 +731,7 @@ export function createRenderer(canvas) {
     ctx.stroke();
   }
 
-  // ---- Overlay: distance scale bar ---- // NEW (D)
+  // ---- Overlay: distance scale bar ----
   // Pixels per AU at the camera target's depth (same formula for perspective and orthographic).
   let showScaleBar = true;
   function setShowScaleBar(v) { showScaleBar = v; }
@@ -764,14 +764,70 @@ export function createRenderer(canvas) {
     ctx.textAlign = 'start';
   }
 
+  // ---- Overlay: gravity field (rubber-sheet grid) ---- // NEW (E)
+  let showField = false;
+  function setShowField(v) { showField = v; }
+
+  function drawGravityField(cam, w) {
+    if (!showField || w.n === 0) return;
+    let maxM = 0;
+    for (let i = 0; i < w.n; i++) maxM = Math.max(maxM, w.mass[i]);
+    if (maxM === 0) return;
+
+    const half = cam.distance * 1.2;          // half-width of the sheet
+    const lines = 25, samples = 48;
+    const step = (2 * half) / (lines - 1);
+    // snap the sheet to a step multiple so it doesn't "swim" while panning
+    const cx = Math.round(cam.target[0] / step) * step;
+    const cy = Math.round(cam.target[1] / step) * step;
+
+    // ignore bodies far too light to dent the sheet (keeps it fast)
+    const src = [];
+    for (let i = 0; i < w.n; i++) if (w.mass[i] > maxM * 1e-4) src.push(i);
+
+    const soft = half * 0.03;
+    const ref = maxM / (0.1 * half);
+    const depthMax = 0.35 * half;
+
+    function sheetZ(x, y) {
+      let phi = 0;
+      for (const i of src) {
+        const dx = x - w.px[i], dy = y - w.py[i], dz = w.pz[i];
+        phi += w.mass[i] / (Math.sqrt(dx * dx + dy * dy + dz * dz) + soft);
+      }
+      return -depthMax * (1 - Math.exp(-phi / ref));
+    }
+
+    ctx.strokeStyle = 'rgba(120, 190, 255, 0.35)';
+    ctx.lineWidth = 1;
+    for (let dir = 0; dir < 2; dir++) {
+      for (let l = 0; l < lines; l++) {
+        const fixed = -half + l * step;
+        ctx.beginPath();
+        let started = false;
+        for (let s = 0; s <= samples; s++) {
+          const t = -half + (s / samples) * 2 * half;
+          const x = cx + (dir === 0 ? t : fixed);
+          const y = cy + (dir === 0 ? fixed : t);
+          const q = project(cam, [x, y, sheetZ(x, y)], width, height);
+          if (!q) { started = false; continue; }
+          if (!started) { ctx.moveTo(q.x, q.y); started = true; }
+          else ctx.lineTo(q.x, q.y);
+        }
+        ctx.stroke();
+      }
+    }
+  }
+
   function render(cam, w, aim, selected = -1, orbit = null, flashes = [], follow = -1) {
     addFlashes(flashes);
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
     drawStarfield(cam);
     drawGrid(cam);
-    drawHabitableZone(cam, w);   // NEW (D)
-    drawOrbitPlane(cam, orbit);  // NEW (D)
+    drawGravityField(cam, w);    // NEW (E)
+    drawHabitableZone(cam, w);
+    drawOrbitPlane(cam, orbit);
     drawOrbit(cam, orbit);
     drawTrails(cam, w, follow);
     drawAim(cam, aim);
@@ -815,11 +871,11 @@ export function createRenderer(canvas) {
     if (showVel) drawArrows(cam, w, w.vx, w.vy, w.vz, 'rgba(120, 255, 160, 0.9)');
     if (showAcc) drawArrows(cam, w, w.ax, w.ay, w.az, 'rgba(255, 150, 90, 0.9)');
     drawFlashes(cam);
-    drawScaleBar(cam); // NEW (D)
+    drawScaleBar(cam);
   }
 
   return { resize, render, recordTrails, clearTrails, removeTrail,
            setTrueScale, setTrailLength, setShowCOM,
            setShowVel, setShowAcc, setShowHill,
-           setShowHZ, setShowPlane, setShowScaleBar }; // NEW (D)
+           setShowHZ, setShowPlane, setShowScaleBar, setShowField }; // NEW (E): setShowField
 }
