@@ -154,3 +154,22 @@ canvas {
   background: #3a5bd9;
   color: #fff;
 }
+
+#edit {
+  position: fixed;
+  top: 12px;
+  right: 274px;
+  width: 230px;
+  padding: 10px 14px;
+  background: rgba(15, 18, 30, 0.8);
+  border: 1px solid rgba(120, 150, 255, 0.25);
+  border-radius: 8px;
+  color: #cfd8ff;
+  font-size: 13px;
+  user-select: none;
+}
+#edit[hidden] { display: none; }
+#edit h3 { margin: 0 0 6px; font-size: 14px; color: #fff; }
+#edit label { display: block; margin-top: 8px; }
+#edit input[type="range"] { width: 100%; }
+#edit .hint { margin-top: 8px; font-size: 11px; color: #8fa0d0; }
