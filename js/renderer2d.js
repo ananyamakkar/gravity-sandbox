@@ -733,6 +733,35 @@ function drawStar(p, mass, r, f, override = null) {
     ctx.stroke();
   }
 
+  // ---- Overlay: ghost orbit plane while aiming a launch ----
+function drawAimPlane(cam, aim) {
+    if (!aim || !aim.plane) return;
+    const { center: c, pHat, qHat, R } = aim.plane;
+    const steps = 96;
+    ctx.beginPath();
+    let started = false;
+    for (let k = 0; k < steps; k++) {
+        const a = (k / steps) * Math.PI * 2;
+        const ca = Math.cos(a) * R, sa = Math.sin(a) * R;
+        const q = project(cam, [
+            c[0] + pHat[0] * ca + qHat[0] * sa,
+            c[1] + pHat[1] * ca + qHat[1] * sa,
+            c[2] + pHat[2] * ca + qHat[2] * sa,
+        ], width, height);
+        if (!q) { started = false; continue; }
+        if (!started) { ctx.moveTo(q.x, q.y); started = true; }
+        else ctx.lineTo(q.x, q.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(120, 200, 255, 0.06)';
+    ctx.fill();
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = 'rgba(120, 200, 255, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
   // ---- Overlay: distance scale bar ----
   // Pixels per AU at the camera target's depth (same formula for perspective and orthographic).
   let showScaleBar = true;
@@ -832,6 +861,7 @@ function drawStar(p, mass, r, f, override = null) {
     drawOrbitPlane(cam, orbit);
     drawOrbit(cam, orbit);
     drawTrails(cam, w, follow);
+    drawAimPlane(cam, aim);
     drawAim(cam, aim);
     drawCOM(cam, w);
     drawHill(cam, w);

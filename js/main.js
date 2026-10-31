@@ -557,6 +557,36 @@ function deleteBody(i) {
     resetBaseline();
 }
 
+// Which body pulls hardest at point p? (largest m / d²)
+function dominantAt(p) {
+    let best = -1, bestPull = 0;
+    for (let j = 0; j < w.n; j++) {
+        const dx = w.px[j] - p[0], dy = w.py[j] - p[1], dz = w.pz[j] - p[2];
+        const pull = w.mass[j] / (dx * dx + dy * dy + dz * dz + 1e-12);
+        if (pull > bestPull) { bestPull = pull; best = j; }
+    }
+    return best;
+}
+
+// The orbital plane a body launched from `start` with velocity `vel` would have
+function aimPlane(start, vel) {
+    const j = dominantAt(start);
+    if (j < 0) return null;
+    const r = [start[0] - w.px[j], start[1] - w.py[j], start[2] - w.pz[j]];
+    const v = [vel[0] - w.vx[j], vel[1] - w.vy[j], vel[2] - w.vz[j]];
+    const h = [r[1] * v[2] - r[2] * v[1],
+               r[2] * v[0] - r[0] * v[2],
+               r[0] * v[1] - r[1] * v[0]];          // h = r × v (plane normal)
+    const rl = Math.hypot(r[0], r[1], r[2]);
+    const hl = Math.hypot(h[0], h[1], h[2]);
+    if (rl < 1e-12 || hl < 1e-12) return null;
+    const pHat = r.map((x) => x / rl);
+    const hHat = h.map((x) => x / hl);
+    const qHat = [hHat[1] * pHat[2] - hHat[2] * pHat[1],
+                  hHat[2] * pHat[0] - hHat[0] * pHat[2],
+                  hHat[0] * pHat[1] - hHat[1] * pHat[0]];   // qHat = hHat × pHat
+    return { center: [w.px[j], w.py[j], w.pz[j]], pHat, qHat, R: rl * 1.3 };
+}
 
 // ---- Input ----
 let mode = null;
@@ -623,7 +653,9 @@ canvas.addEventListener('pointermove', (e) => {
             const p = unproject(cam, e.clientX, e.clientY, W(), H(), launchHeight);
             if (p) {
                 aim.current = p;
-                aim.path = predictPath(w, aim.start, launchVelocity(aim.start, p), launchMass, 400, 0.002, followIdx);
+               const vel = launchVelocity(aim.start, p);
+               aim.path = predictPath(w, aim.start, vel, launchMass, 400, 0.002, followIdx);
+               aim.plane = aimPlane(aim.start, vel);
             }
         }
     } else if (mode === 'move' && moveIdx >= 0 && moveIdx < w.n) {
