@@ -331,6 +331,9 @@ document.getElementById('ov-field').addEventListener('change', (e) => {
 document.getElementById('ov-gizmo').addEventListener('change', (e) => {
     renderer.setShowGizmo(e.target.checked);
 });
+document.getElementById('ov-edge').addEventListener('change', (e) => {
+    renderer.setShowEdgeGlow(e.target.checked);
+});
 
 
 // ---- UI: visual vs true scale ----

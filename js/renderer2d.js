@@ -795,6 +795,35 @@ function drawGizmo(cam) {
     }
 }
 
+// ---- Overlay: edge glow for bodies that left the screen ----
+let showEdgeGlow = true;
+function setShowEdgeGlow(v) { showEdgeGlow = v; }
+
+function drawEdgeGlow(cam, w) {
+    if (!showEdgeGlow) return;
+    const R = 70;                                   // glow radius in pixels
+    ctx.save();
+    for (let i = 0; i < w.n; i++) {
+        const p = project(cam, [w.px[i], w.py[i], w.pz[i]], width, height);
+        if (!p) continue;                           // behind the camera
+        const inside = p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height;
+        if (inside) continue;
+
+        // nearest point on the screen edge
+        const ex = Math.min(width, Math.max(0, p.x));
+        const ey = Math.min(height, Math.max(0, p.y));
+        const dist = Math.hypot(p.x - ex, p.y - ey); // how far outside the screen
+        const a = Math.max(0.12, 0.6 * (1 - dist / (2 * Math.max(width, height))));
+
+        const g = ctx.createRadialGradient(ex, ey, 0, ex, ey, R);
+        g.addColorStop(0, `rgba(255, 140, 90, ${a})`);
+        g.addColorStop(1, 'rgba(255, 140, 90, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(ex - R, ey - R, R * 2, R * 2);
+    }
+    ctx.restore();
+}
+
   // ---- Overlay: distance scale bar ----
   // Pixels per AU at the camera target's depth (same formula for perspective and orthographic).
   let showScaleBar = true;
@@ -938,10 +967,11 @@ function drawGizmo(cam) {
     drawFlashes(cam);
     drawScaleBar(cam);
     drawGizmo(cam);
+    drawEdgeGlow(cam, w);
   }
 
   return { resize, render, recordTrails, clearTrails, removeTrail,
            setTrueScale, setTrailLength, setShowCOM,
            setShowVel, setShowAcc, setShowHill,
-           setShowHZ, setShowPlane, setShowScaleBar, setShowField, setShowGizmo }; 
+           setShowHZ, setShowPlane, setShowScaleBar, setShowField, setShowGizmo, setShowEdgeGlow }; 
 }
