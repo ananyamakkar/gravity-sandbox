@@ -4,18 +4,40 @@ import { cross, dot, length, normalize, add, scale } from './vec3.js';
 export const AU_YR_TO_KMS = 4.740470446;   // 1 AU/yr in km/s
 const TWO_PI = Math.PI * 2;
 
-// The body exerting the strongest pull on body i (largest m / d^2)
+// The body exerting the strongest pull on body i (largest m / d^2).
+// If heavierThan >= 0, only bodies heavier than that mass are considered.
+function strongestPull(w, i, heavierThan = -1) {
+    let best = -1, bestPull = 0;
+    for (let j = 0; j < w.n; j++) {
+        if (j === i) continue;
+        if (heavierThan >= 0 && w.mass[j] <= heavierThan) continue;
+        const dx = w.px[j] - w.px[i];
+        const dy = w.py[j] - w.py[i];
+        const dz = w.pz[j] - w.pz[i];
+        const pull = w.mass[j] / (dx * dx + dy * dy + dz * dz + 1e-12);
+        if (pull > bestPull) { bestPull = pull; best = j; }
+    }
+    return best;
+}
+
+// The body body i orbits, decided by Hill spheres:
+// the smallest Hill sphere that contains i wins. If none does, fall back to
+// the strongest pull (so planets orbit the Sun, and a lone body still works).
 export function findDominant(w, i) {
-  let best = -1, bestPull = 0;
-  for (let j = 0; j < w.n; j++) {
-    if (j === i) continue;
-    const dx = w.px[j] - w.px[i];
-    const dy = w.py[j] - w.py[i];
-    const dz = w.pz[j] - w.pz[i];
-    const pull = w.mass[j] / (dx * dx + dy * dy + dz * dz + 1e-12);
-    if (pull > bestPull) { bestPull = pull; best = j; }
-  }
-  return best;
+    let best = -1, bestR = Infinity;
+    for (let j = 0; j < w.n; j++) {
+        if (j === i || w.mass[j] <= w.mass[i]) continue;   // the parent must be heavier
+
+        const P = strongestPull(w, j, w.mass[j]);          // j's own parent
+        if (P < 0) continue;                               // top-level body: no Hill sphere
+
+        const aj = Math.hypot(w.px[j] - w.px[P], w.py[j] - w.py[P], w.pz[j] - w.pz[P]);
+        const rH = aj * Math.cbrt(w.mass[j] / (3 * w.mass[P]));   // Hill radius of j
+        const d = Math.hypot(w.px[i] - w.px[j], w.py[i] - w.py[j], w.pz[i] - w.pz[j]);
+
+        if (d < rH && rH < bestR) { best = j; bestR = rH; }
+    }
+    return best >= 0 ? best : strongestPull(w, i);
 }
 
 function angleBetween(a, b) {
