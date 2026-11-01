@@ -54,6 +54,60 @@ export function createRenderer(canvas) {
     }
   })();
 
+// ---- Nebula: soft colored clouds at fixed directions, packed along a band ----
+let showNebula = true;
+function setShowNebula(v) { showNebula = v; }
+
+const NEBULA_COUNT = 40;
+const NEBULA_STRENGTH = 1.0;      // raise for a brighter nebula, lower for subtler
+const nebula = [];
+(function makeNebula() {
+    let seed = 987654;            // seeded, so it looks the same every load
+    const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const nrm = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; };
+    const band = nrm([0.3, -0.4, 0.85]);                 // normal of the "galactic plane"
+    const palette = [[90, 70, 200], [200, 80, 140], [60, 140, 220], [120, 90, 220]];
+    for (let i = 0; i < NEBULA_COUNT; i++) {
+        const z = rand() * 2 - 1;
+        const a = rand() * Math.PI * 2;
+        const r = Math.sqrt(1 - z * z);
+        let d = [r * Math.cos(a), r * Math.sin(a), z];
+        const k = d[0] * band[0] + d[1] * band[1] + d[2] * band[2];
+        d = nrm([d[0] - band[0] * k * 0.85,              // squash toward the band
+                 d[1] - band[1] * k * 0.85,
+                 d[2] - band[2] * k * 0.85]);
+        nebula.push({
+            d,
+            rho: 0.15 + rand() * 0.35,                   // angular size
+            color: palette[Math.floor(rand() * palette.length)],
+            alpha: 0.03 + rand() * 0.05,
+        });
+    }
+})();
+
+function drawNebula(cam) {
+    if (!showNebula) return;
+    const m = viewMatrix(cam);
+    const focal = (height / 2) / Math.tan(cam.fov / 2);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';            // glows add up instead of covering
+    for (const c of nebula) {
+        const q = mulMatVec(m, c.d);
+        if (q[2] < 0.25) continue;                       // behind or near the edge of view
+        const x = width / 2 + (q[0] / q[2]) * focal;
+        const y = height / 2 - (q[1] / q[2]) * focal;
+        const R = (c.rho / q[2]) * focal;
+        if (x + R < 0 || x - R > width || y + R < 0 || y - R > height) continue;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, R);
+        const a = c.alpha * NEBULA_STRENGTH;
+        g.addColorStop(0, `rgba(${c.color[0]}, ${c.color[1]}, ${c.color[2]}, ${a})`);
+        g.addColorStop(1, `rgba(${c.color[0]}, ${c.color[1]}, ${c.color[2]}, 0)`);
+        ctx.fillStyle = g;
+        ctx.fillRect(x - R, y - R, R * 2, R * 2);
+    }
+    ctx.restore();
+}
+
   function drawStarfield(cam) {
     const m = viewMatrix(cam);
     const focal = (height / 2) / Math.tan(cam.fov / 2);
@@ -916,6 +970,7 @@ function drawEdgeGlow(cam, w) {
     addFlashes(flashes);
     ctx.fillStyle = '#05060a';
     ctx.fillRect(0, 0, width, height);
+    drawNebula(cam); 
     drawStarfield(cam);
     drawGrid(cam);
     drawGravityField(cam, w);    
@@ -973,5 +1028,5 @@ function drawEdgeGlow(cam, w) {
   return { resize, render, recordTrails, clearTrails, removeTrail,
            setTrueScale, setTrailLength, setShowCOM,
            setShowVel, setShowAcc, setShowHill,
-           setShowHZ, setShowPlane, setShowScaleBar, setShowField, setShowGizmo, setShowEdgeGlow }; 
+           setShowHZ, setShowPlane, setShowScaleBar, setShowField, setShowGizmo, setShowEdgeGlow, setShowNebula }; 
 }

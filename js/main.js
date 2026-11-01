@@ -341,6 +341,9 @@ document.getElementById('ov-gizmo').addEventListener('change', (e) => {
 document.getElementById('ov-edge').addEventListener('change', (e) => {
     renderer.setShowEdgeGlow(e.target.checked);
 });
+document.getElementById('ov-nebula').addEventListener('change', (e) => {
+    renderer.setShowNebula(e.target.checked);
+});
 
 
 // ---- UI: visual vs true scale ----
