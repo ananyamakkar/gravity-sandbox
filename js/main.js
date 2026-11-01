@@ -45,8 +45,15 @@ const H = () => window.innerHeight;
 
 // ---- Conservation baseline ----
 let base = diagnostics(w);
-function resetBaseline() { base = diagnostics(w); }
-
+let lostE = 0;              // energy change caused by merges since the baseline
+let lostL = [0, 0, 0];      // angular momentum that went into spin at merges
+let merges = 0;
+function resetBaseline() {
+    base = diagnostics(w);
+    lostE = 0;
+    lostL = [0, 0, 0];
+    merges = 0;
+}
 
 // ---- Time controls ----
 const DT = 0.0005;
@@ -539,12 +546,18 @@ const pct = (x) => {
 };
 function updateConservation() {
     const d = diagnostics(w);
-    const dE = base.energy !== 0 ? (d.energy - base.energy) / Math.abs(base.energy) : 0;
+    const E0 = Math.abs(base.energy);
+
+    // add the merge ledger back, so only real integration error shows as drift
+    const dE = E0 > 0 ? (d.energy + lostE - base.energy) / E0 : 0;
     const dPvec = [d.P[0] - base.P[0], d.P[1] - base.P[1], d.P[2] - base.P[2]];
     const dP = base.pscale > 0 ? vmag(dPvec) / base.pscale : 0;
-    const dLvec = [d.L[0] - base.L[0], d.L[1] - base.L[1], d.L[2] - base.L[2]];
+    const dLvec = [d.L[0] + lostL[0] - base.L[0],
+                   d.L[1] + lostL[1] - base.L[1],
+                   d.L[2] + lostL[2] - base.L[2]];
     const L0 = vmag(base.L);
     const dL = L0 > 0 ? vmag(dLvec) / L0 : 0;
+
     let html = '<h3>Conservation</h3>';
     html += row('Total energy', d.energy.toExponential(4) + ' M☉AU²/yr²');
     html += row('Energy drift', pct(dE));
@@ -552,7 +565,12 @@ function updateConservation() {
     html += row('Momentum drift', pct(dP));
     html += row('Ang. momentum |L|', vmag(d.L).toExponential(4));
     html += row('Ang. mom. drift', pct(dL));
-    html += `<div class="sec">Baseline resets on launch, merge, delete, move or edit</div>`;
+    if (merges > 0) {
+        html += `<div class="sec">Merges: ${merges}</div>`;
+        html += row('Energy offset', pct(E0 > 0 ? lostE / E0 : 0));
+        html += row('Ang. mom. to spin', pct(L0 > 0 ? vmag(lostL) / L0 : 0));
+    }
+    html += `<div class="sec">Baseline resets on launch, delete, move or edit</div>`;
     consEl.innerHTML = html;
 }
 
@@ -750,9 +768,14 @@ function runCollisions() {
             renderer.removeTrail(ev.removed, ev.moved);
             selected = remapIndex(selected, ev);
             if (followIdx >= 0) followIdx = remapIndex(followIdx, ev);
+
+            lostE += ev.dE;                 // ledger: what this merge changed
+            lostL[0] += ev.dL[0];
+            lostL[1] += ev.dL[1];
+            lostL[2] += ev.dL[2];
+            merges++;
         }
         if (selected >= w.n) selected = -1;
-        resetBaseline(); // merging changes the system's totals
     }
 }
 

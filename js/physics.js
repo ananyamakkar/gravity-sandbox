@@ -247,33 +247,47 @@ export function handleCollisions(w, scaleFactor = 1) {
 }
 
 function mergeBodies(w, i, j, events) {
-  const mi = w.mass[i], mj = w.mass[j];
-  const m = mi + mj;
-  const wi = mi / m, wj = mj / m;
-  w.px[i] = w.px[i] * wi + w.px[j] * wj;
-  w.py[i] = w.py[i] * wi + w.py[j] * wj;
-  w.pz[i] = w.pz[i] * wi + w.pz[j] * wj;
-  w.vx[i] = w.vx[i] * wi + w.vx[j] * wj;
-  w.vy[i] = w.vy[i] * wi + w.vy[j] * wj;
-  w.vz[i] = w.vz[i] * wi + w.vz[j] * wj;
-  w.mass[i] = m;
-  w.radius[i] = radiusFromMass(m);
-  if (mj > mi) w.color[i] = w.color[j];
-  // w.n has not been decremented yet, so w.n - 1 is the slot that gets moved into j
-  events.push({ x: w.px[i], y: w.py[i], z: w.pz[i], size: Math.cbrt(Math.min(mi, mj)), big: m > 0.05,
-                kept: i, removed: j, moved: w.n - 1 });
+    const before = diagnostics(w);               // totals just before this merge
 
-  // Remove j by moving the last body into its slot
-  const last = w.n - 1;
-  if (j !== last) {
-    for (const key of ['px','py','pz','vx','vy','vz','ax','ay','az','mass','radius']) {
-      w[key][j] = w[key][last];
+    const mi = w.mass[i], mj = w.mass[j];
+    const m = mi + mj;
+    const wi = mi / m, wj = mj / m;
+    w.px[i] = w.px[i] * wi + w.px[j] * wj;
+    w.py[i] = w.py[i] * wi + w.py[j] * wj;
+    w.pz[i] = w.pz[i] * wi + w.pz[j] * wj;
+    w.vx[i] = w.vx[i] * wi + w.vx[j] * wj;
+    w.vy[i] = w.vy[i] * wi + w.vy[j] * wj;
+    w.vz[i] = w.vz[i] * wi + w.vz[j] * wj;
+    w.mass[i] = m;
+    w.radius[i] = radiusFromMass(m);
+    if (mj > mi) w.color[i] = w.color[j];        // the heavier body's color survives
+
+    // w.n has not been decremented yet, so w.n - 1 is the slot that gets moved into j
+    const ev = {
+        x: w.px[i], y: w.py[i], z: w.pz[i],
+        size: Math.cbrt(Math.min(mi, mj)), big: m > 0.05,
+        kept: i, removed: j, moved: w.n - 1,
+    };
+    events.push(ev);
+
+    // Remove j by moving the last body into its slot
+    const last = w.n - 1;
+    if (j !== last) {
+        for (const key of ['px','py','pz','vx','vy','vz','ax','ay','az','mass','radius']) {
+            w[key][j] = w[key][last];
+        }
     }
-  }
-  w.color[j] = w.color[last];
-  w.color[last] = null;
-  w.n--;
-  computeAccelerations(w);
+    w.color[j] = w.color[last];
+    w.color[last] = null;
+    w.n--;
+    computeAccelerations(w);
+
+    // what this merge changed: used by the conservation readout
+    const after = diagnostics(w);
+    ev.dE = before.energy - after.energy;
+    ev.dL = [before.L[0] - after.L[0],
+             before.L[1] - after.L[1],
+             before.L[2] - after.L[2]];
 }
 
 // Safe timestep from the closest pair: a fraction (eta) of the pair's
