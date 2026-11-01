@@ -45,15 +45,18 @@ const H = () => window.innerHeight;
 
 // ---- Conservation baseline ----
 let base = diagnostics(w);
-let lostE = 0;              // energy change caused by merges since the baseline
-let lostL = [0, 0, 0];      // angular momentum that went into spin at merges
+let lostE = 0;              // energy change caused by merges/bounces since the baseline
+let lostL = [0, 0, 0];      // angular momentum change from merges/bounces
 let merges = 0;
+let bounces = 0;
 function resetBaseline() {
     base = diagnostics(w);
     lostE = 0;
     lostL = [0, 0, 0];
     merges = 0;
+    bounces = 0;
 }
+
 
 // ---- Time controls ----
 const DT = 0.0005;
@@ -118,6 +121,10 @@ let method = 'verlet';
 document.getElementById('method').addEventListener('change', (e) => {
     method = e.target.value;
     resetBaseline();
+});
+let collisionMode = 'merge';
+document.getElementById('collide').addEventListener('change', (e) => {
+    collisionMode = e.target.value;
 });
 document.getElementById('btn-restart').addEventListener('click', () => {
     applyPresetDefaults(initWorld());
@@ -283,6 +290,7 @@ document.getElementById('btn-side').addEventListener('click', () => { cam.pitch 
 document.getElementById('btn-bottom').addEventListener('click', () => { cam.pitch = -Math.PI / 2; });
 document.getElementById('btn-reset').addEventListener('click', () => { setFollow(-1); resetCamera(); });
 
+
 // ---- UI: slow auto-rotate ----
 let autoRotate = false;
 const AUTO_ROTATE_SPEED = 0.15;   // radians per real second (about 42 s per full turn)
@@ -438,7 +446,6 @@ function updateInfo() {
 // ---- Edit panel: change mass and radius of the selected body ----
 // The panel is built ONCE per selected body (not every refresh), otherwise
 // rewriting its HTML would reset the sliders while you drag them.
-
 const editEl = document.getElementById('edit');
 const AU_KM = 149597870.7;
 let editFor = -1;   // which body the panel is currently built for
@@ -551,7 +558,7 @@ function updateConservation() {
     const d = diagnostics(w);
     const E0 = Math.abs(base.energy);
 
-    // add the merge ledger back, so only real integration error shows as drift
+    // add the merge/bounce ledger back, so only real integration error shows as drift
     const dE = E0 > 0 ? (d.energy + lostE - base.energy) / E0 : 0;
     const dPvec = [d.P[0] - base.P[0], d.P[1] - base.P[1], d.P[2] - base.P[2]];
     const dP = base.pscale > 0 ? vmag(dPvec) / base.pscale : 0;
@@ -568,10 +575,10 @@ function updateConservation() {
     html += row('Momentum drift', pct(dP));
     html += row('Ang. momentum |L|', vmag(d.L).toExponential(4));
     html += row('Ang. mom. drift', pct(dL));
-    if (merges > 0) {
-        html += `<div class="sec">Merges: ${merges}</div>`;
+    if (merges > 0 || bounces > 0) {
+        html += `<div class="sec">Merges: ${merges} · Bounces: ${bounces}</div>`;
         html += row('Energy offset', pct(E0 > 0 ? lostE / E0 : 0));
-        html += row('Ang. mom. to spin', pct(L0 > 0 ? vmag(lostL) / L0 : 0));
+        html += row('Ang. mom. offset', pct(L0 > 0 ? vmag(lostL) / L0 : 0));
     }
     html += `<div class="sec">Baseline resets on launch, delete, move or edit</div>`;
     consEl.innerHTML = html;
@@ -592,6 +599,8 @@ function deleteBody(i) {
     resetBaseline();
 }
 
+
+// ---- Ghost orbit plane while aiming ----
 // Which body pulls hardest at point p? (largest m / d²)
 function dominantAt(p) {
     let best = -1, bestPull = 0;
@@ -622,6 +631,7 @@ function aimPlane(start, vel) {
                   hHat[0] * pHat[1] - hHat[1] * pHat[0]];   // qHat = hHat × pHat
     return { center: [w.px[j], w.py[j], w.pz[j]], pHat, qHat, R: rl * 1.3 };
 }
+
 
 // ---- Input ----
 let mode = null;
@@ -671,7 +681,7 @@ canvas.addEventListener('pointermove', (e) => {
         const dx = e.clientX - lastX;
         const dy = e.clientY - lastY;
         cam.yaw -= dx * 0.005;
-       cam.pitch = Math.min(Math.PI / 2, Math.max(-Math.PI / 2, cam.pitch + dy * 0.005));
+        cam.pitch = Math.min(Math.PI / 2, Math.max(-Math.PI / 2, cam.pitch + dy * 0.005));
     } else if (mode === 'pan') {
         const p0 = unproject(cam, lastX, lastY, W(), H(), 0);
         const p1 = unproject(cam, e.clientX, e.clientY, W(), H(), 0);
@@ -688,9 +698,9 @@ canvas.addEventListener('pointermove', (e) => {
             const p = unproject(cam, e.clientX, e.clientY, W(), H(), launchHeight);
             if (p) {
                 aim.current = p;
-               const vel = launchVelocity(aim.start, p);
-               aim.path = predictPath(w, aim.start, vel, launchMass, 400, 0.002, followIdx);
-               aim.plane = aimPlane(aim.start, vel);
+                const vel = launchVelocity(aim.start, p);
+                aim.path = predictPath(w, aim.start, vel, launchMass, 400, 0.002, followIdx);
+                aim.plane = aimPlane(aim.start, vel);
             }
         }
     } else if (mode === 'move' && moveIdx >= 0 && moveIdx < w.n) {
@@ -764,18 +774,21 @@ function remapIndex(idx, ev) {
 
 
 function runCollisions() {
-    const events = handleCollisions(w, trueScale ? 1 : COLLISION_SCALE);
+    const events = handleCollisions(w, trueScale ? 1 : COLLISION_SCALE, collisionMode);
     if (events.length > 0) {
         for (const ev of events) {
             flashes.push(ev);
-            renderer.removeTrail(ev.removed, ev.moved);
-            selected = remapIndex(selected, ev);
-            if (followIdx >= 0) followIdx = remapIndex(followIdx, ev);
 
-            lostE += ev.dE;                 // ledger: what this merge changed
+            lostE += ev.dE;                 // ledger for both merges and bounces
             lostL[0] += ev.dL[0];
             lostL[1] += ev.dL[1];
             lostL[2] += ev.dL[2];
+
+            if (ev.bounce) { bounces++; continue; }   // a bounce removes nothing
+
+            renderer.removeTrail(ev.removed, ev.moved);
+            selected = remapIndex(selected, ev);
+            if (followIdx >= 0) followIdx = remapIndex(followIdx, ev);
             merges++;
         }
         if (selected >= w.n) selected = -1;
@@ -814,8 +827,10 @@ function frame(now) {
     }
     if (substeps === MAX_SUBSTEPS) acc = 0;
 
-  // drift the camera around, but never fight the user while they are dragging
-  if (autoRotate && mode === null) cam.yaw += real * AUTO_ROTATE_SPEED;
+
+    // drift the camera around, but never fight the user while they are dragging
+    if (autoRotate && mode === null) cam.yaw += real * AUTO_ROTATE_SPEED;
+
     const orbit = (selected >= 0 && selected < w.n) ? sampleOrbit(w, selected) : null;
 
 

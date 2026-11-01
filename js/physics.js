@@ -225,8 +225,12 @@ export function radiusFromMass(m) {
 // Merges overlapping bodies (inelastic, momentum-conserving).
 // Returns an array of events for the renderer and main loop:
 // { x, y, z, size, big, kept, removed, moved }
-export function handleCollisions(w, scaleFactor = 1) {
-  const events = [];
+export function handleCollisions(w, scaleFactor = 1, mode = 'merge') {
+    const events = [];
+    if (mode === 'bounce') {
+        bounceCollisions(w, scaleFactor, events);
+        return events;
+    }
   let i = 0;
   while (i < w.n) {
     let merged = false;
@@ -244,6 +248,61 @@ export function handleCollisions(w, scaleFactor = 1) {
     if (!merged) i++;
   }
   return events;
+}
+
+// Elastic bounce: exchange momentum along the line between the two centres,
+// then push the pair apart so they do not stay overlapped.
+// restitution = 1 is perfectly elastic, 0 is a perfectly inelastic "thud".
+function bounceCollisions(w, scaleFactor, events, restitution = 1) {
+    let any = false;
+    for (let i = 0; i < w.n; i++) {
+        for (let j = i + 1; j < w.n; j++) {
+            const dx = w.px[j] - w.px[i];
+            const dy = w.py[j] - w.py[i];
+            const dz = w.pz[j] - w.pz[i];
+            const rr = (w.radius[i] + w.radius[j]) * scaleFactor;
+            const d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 >= rr * rr || d2 === 0) continue;         // not touching
+
+            const d = Math.sqrt(d2);
+            const nx = dx / d, ny = dy / d, nz = dz / d;      // unit vector from i to j
+            const vn = (w.vx[j] - w.vx[i]) * nx
+                     + (w.vy[j] - w.vy[i]) * ny
+                     + (w.vz[j] - w.vz[i]) * nz;              // closing speed (negative = approaching)
+            if (vn >= 0) continue;                            // already moving apart
+
+            const before = diagnostics(w);
+            const mi = w.mass[i], mj = w.mass[j];
+
+            // impulse along the normal
+            const J = (-(1 + restitution) * vn) / (1 / mi + 1 / mj);
+            w.vx[i] -= (J / mi) * nx; w.vy[i] -= (J / mi) * ny; w.vz[i] -= (J / mi) * nz;
+            w.vx[j] += (J / mj) * nx; w.vy[j] += (J / mj) * ny; w.vz[j] += (J / mj) * nz;
+
+            // push the pair apart (keeps their centre of mass fixed)
+            const push = rr * 1.001 - d;
+            const si = (push * mj) / (mi + mj);
+            const sj = (push * mi) / (mi + mj);
+            w.px[i] -= nx * si; w.py[i] -= ny * si; w.pz[i] -= nz * si;
+            w.px[j] += nx * sj; w.py[j] += ny * sj; w.pz[j] += nz * sj;
+
+            const after = diagnostics(w);
+            events.push({
+                x: (w.px[i] + w.px[j]) / 2,
+                y: (w.py[i] + w.py[j]) / 2,
+                z: (w.pz[i] + w.pz[j]) / 2,
+                size: Math.cbrt(Math.min(mi, mj)),
+                big: false,
+                bounce: true,                                  // tells main.js nothing was removed
+                dE: before.energy - after.energy,
+                dL: [before.L[0] - after.L[0],
+                     before.L[1] - after.L[1],
+                     before.L[2] - after.L[2]],
+            });
+            any = true;
+        }
+    }
+    if (any) computeAccelerations(w);
 }
 
 function mergeBodies(w, i, j, events) {

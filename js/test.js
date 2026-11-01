@@ -54,8 +54,8 @@ const tests = [
             run(w, 10);
             const d1 = diagnostics(w);
             const dP = Math.hypot(d1.P[0] - d0.P[0], d1.P[1] - d0.P[1], d1.P[2] - d0.P[2]);
-            const rel = d0.pscale > 0 ? dP / d0.pscale : dP;
-            return { pass: rel < 1e-9, detail: `relative drift ${fmt(rel)} (limit 1e-9)` };
+            const relP = d0.pscale > 0 ? dP / d0.pscale : dP;
+            return { pass: relP < 1e-9, detail: `relative drift ${fmt(relP)} (limit 1e-9)` };
         },
     },
     {
@@ -108,6 +108,29 @@ const tests = [
 
             const pass = merged && massOk && dP < 1e-12 && ledger && eErr < 1e-9;
             return { pass, detail: `merged=${merged}, mass ok=${massOk}, momentum change ${fmt(dP)}, ledger recorded=${ledger}` };
+        },
+    },
+    {
+        name: 'Bounce conserves momentum and kinetic energy, and bodies separate',
+        fn() {
+            const w = createWorld();
+            body(w, 2e-3, [0, 0, 0],    [1, 0, 0],    0.1);
+            body(w, 1e-3, [0.15, 0, 0], [-1, 0.5, 0], 0.1);
+            computeAccelerations(w);
+            const d0 = diagnostics(w);
+            const events = handleCollisions(w, 1, 'bounce');
+            const d1 = diagnostics(w);
+
+            const dP = Math.hypot(d1.P[0] - d0.P[0], d1.P[1] - d0.P[1], d1.P[2] - d0.P[2]);
+            const dKE = Math.abs(d1.ke - d0.ke) / d0.ke;
+
+            const rx = w.px[1] - w.px[0], ry = w.py[1] - w.py[0], rz = w.pz[1] - w.pz[0];
+            const rl = Math.hypot(rx, ry, rz);
+            const closing = ((w.vx[1] - w.vx[0]) * rx + (w.vy[1] - w.vy[0]) * ry + (w.vz[1] - w.vz[0]) * rz) / rl;
+
+            const ok = events.length === 1 && events[0].bounce === true && w.n === 2
+                    && dP < 1e-12 && dKE < 1e-9 && closing > 0;
+            return { pass: ok, detail: `momentum change ${fmt(dP)}, KE change ${fmt(dKE)}, separating speed ${closing.toFixed(3)}` };
         },
     },
     {
